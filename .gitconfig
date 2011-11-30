@@ -1,0 +1,14 @@
+[user]
+	name = Reid Baker
+	email = hamiltonbaker@yahoo.com
+[giggle]
+	main-window-maximized = true
+	main-window-geometry = 0x0+0+0
+	history-view-vpane-position = 593
+	main-window-view = HistoryView
+	file-view-vpane-position = 760
+[color]
+	branch = auto
+	diff = auto
+	interactive = auto
+	status = auto
