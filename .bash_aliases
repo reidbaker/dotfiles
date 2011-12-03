@@ -16,3 +16,4 @@ alias gotooregon='cd /home/reid/Documents/school/cs2340/oregon-trail-super-turbo
 alias gotoetest='cd /home/reid/Documents/work/techTeam/etest_v2/trunk/etest'
 alias gotostealthetfromtsquare='cd /home/reid/Documents/school/cs4235/steal-the-t-from-tsquare'
 alias gotomatlab='cd /home/reid/Documents/MATLAB'
+alias gotolostandfound='cd /home/reid/Documents/school/cs4261/GT_Lost_Found/'
