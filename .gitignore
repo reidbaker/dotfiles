@@ -30,8 +30,8 @@
 ehthumbs.db
 Icon?
 Thumbs.db
-#if the ~ causes issues remove it
 *.*~
+*.swp
 
 # Built application files #
 ###########################
