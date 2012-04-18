@@ -9,7 +9,7 @@ alias gco='git checkout'
 #####################
 alias apt-s='apt-cache search'
 alias la='ls -alh'
-alias emacskilld='emacsclient -e '(kill-emacs)'
+alias emacskilld="emacsclient -e '(kill-emacs)'"
 
 ## project commands ##
 ######################
