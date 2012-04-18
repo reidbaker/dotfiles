@@ -13,6 +13,6 @@ alias emacskilld="emacsclient -e '(kill-emacs)'"
 
 ## project commands ##
 ######################
-alias gotoetest='cd /home/reid/Documents/work/techTeam/etest_v2/trunk/etest'
+alias gotoetest='cd /home/reid/Documents/work/techTeam/etest'
 alias gotomatlab='cd /home/reid/Documents/MATLAB'
 alias gotodotfiles='cd /home/reid/.dotfiles'
