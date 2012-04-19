@@ -1,0 +1,120 @@
+#!/bin/bash
+
+failures=0
+
+ignorepyflakes=$(git config hooks.ignorepyflakes)
+if [ "$ignorepyflakes" != "true" ]; then
+    echo "Checking pyflakes..."
+    # Run pyflakes on all touched .py files
+    pyflakesissues=0
+    for file in $(exec git diff --staged --name-only | grep '\.py$'); do
+        if [ -e "$file" ] && ! pyflakes "$file"; then
+            pyflakesissues=1
+        fi
+    done
+    if [ $pyflakesissues == 1 ]; then
+        echo "Pyflakes reported issues."
+        failures=1
+    fi
+fi
+
+
+ignoreassertstyle=$(git config hooks.ignoreassertstyle)
+if [ "$ignoreassertstyle" != "true" ]; then
+    echo "Checking for poor assert style..."
+    assertissues=0
+    for file in $(exec git diff --staged --name-only | grep '\.py$'); do
+        if [ -e "$file" ] && ! ~/.dotfiles/check_asserts -q "$file"; then
+            echo "Bad assert style in $file"
+            assertissues=1
+        fi
+    done
+    if [ $assertissues == 1 ]; then
+        echo "'assert' is a statement in Python, not a function."
+        echo "Don't use assert(foo) or assert(foo, bar) - instead, use:"
+        echo
+        echo "    assert foo"
+        echo "    assert foo, bar # Preferred so you can give an actual message"
+        echo
+        echo "(If parentheses are absolutely necessary for the first parameter,"
+        echo " put a space before them, like so: 'assert (foo), bar' - that way"
+        echo " it's not misleading to someone who has to work on the code later!)"
+        failures=1
+    fi
+fi
+
+
+ignorewhitespace=$(git config hooks.ignorewhitespace)
+if [ "$ignorewhitespace" != "true" ]; then
+    echo "Checking whitespace..."
+    # First bit grabs the sha, second bit redirects stdout to null and
+    # redirects errors to stdout
+    if git rev-parse --verify HEAD >/dev/null 2>&1; then
+        against=HEAD
+    else
+        echo "Exiting: Failed on check for whitespace. git config hooks.ignorewhitespace 'true' for a temp fix"
+        exit 1 # This is not good
+    fi
+    # Find files with trailing whitespace
+    for FILE in $(exec git diff-index --check --cached $against -- | sed '/^[+-]/d' | sed 's/:[0-9][0-9]*:.*//' | uniq); do
+        echo "Whitespace errors found in $FILE - fixing..."
+        # Fix trailing space
+        sed -i 's/[[:space:]]*$//' "$FILE"
+        # Fix space-before-tab
+        perl -i -p -e 's/(?<! ) {1,3}\t(?=\t*\s*(\S.*|$))/\t/' "$FILE"
+        # Fix empty lines at end of file
+        sed -i -e :a -e '/^\n*$/N;/\n$/ba' "$FILE"
+        sed -i -e :a -e '/^\n*$/{$d;N;ba' -e '}' "$FILE"
+        whitespacerrors="true"
+    done
+    if [ "$whitespacerrors" == "true" ]; then
+        echo
+        echo "One or more whitespace errors were detected and automatically fixed."
+        echo "Please verify that the result was correct, add the results, and then try to commit again."
+        echo
+        failures=1
+    fi
+fi
+
+
+# Check for JS mistakes
+# skip this if jshint is not installed
+ignorejshint=$(git config hooks.ignorejshint)
+if [ "$ignorejshint" != "true" ] && which jshint >/dev/null; then
+    echo "Checking JSHint..."
+    # Run jshint on all touched .js files
+    jshintissues=0
+    for file in $(exec git diff --staged --name-only | grep '\.js$'); do
+        if [ -e "$file" ] && ! jshint "$file"; then
+            jshintissues=1
+        fi
+    done
+
+    if [ $jshintissues == 1 ]; then
+        echo "JShint reported issues."
+        failures=1
+    fi
+fi
+
+
+newlargefiles=0
+git diff --cached --name-status | awk '$1 == "A" {print $2}' | while read file ; do
+    kbsize=$(du -k "$file" | cut -f1)
+    if [ "$kbsize" -gt 5000 ]; then
+        echo "New large file detected ($kbsize kb): $file"
+        newlargefiles=1
+    fi
+done
+if [ $newlargefiles == 1 ]; then
+    echo
+    echo "One or more large files would be added by this commit."
+    echo "It's usually a bad idea."
+    echo
+    failures=1
+fi
+
+
+if [ $failures -ne 0 ]; then
+    echo "(Use 'git commit --no-verify' to bypass.)"
+    exit 1
+fi
