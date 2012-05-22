@@ -10,6 +10,8 @@ alias gco='git checkout'
 alias apt-s='apt-cache search'
 alias la='ls -alh'
 alias emacskilld="emacsclient -e '(kill-emacs)'"
+# mid 15 20 file.txt prints out lines 15-20 inclusive
+function mid() { awk NR==$1,NR==$2 $3 ;}
 
 ## project commands ##
 ######################
