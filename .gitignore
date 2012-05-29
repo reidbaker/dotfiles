@@ -46,3 +46,7 @@ bin/
 # Eclipse files #
 #################
 .settings
+
+# Emacs Files #
+###############
+.#*
