@@ -52,6 +52,7 @@ if [ "$ignorewhitespace" != "true" ]; then
     if git rev-parse --verify HEAD >/dev/null 2>&1; then
         against=HEAD
     else
+        # If this is the first commit ever use --no-verify
         echo "Exiting: Failed on check for whitespace. git config hooks.ignorewhitespace 'true' for a temp fix"
         exit 1 # This is not good
     fi
