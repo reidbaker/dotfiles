@@ -1,6 +1,7 @@
 ﻿# Compiled source #
 ###################
 *.class
+*.pyc
 
 # Classpath file #
 ##################
