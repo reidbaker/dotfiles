@@ -18,6 +18,21 @@ if [ "$ignorepyflakes" != "true" ]; then
     fi
 fi
 
+ignorespelling=$(git config hooks.ignorespelling)
+if [ "$ignorespelling" != "true" ]; then
+    echo "Checking Spelling..."
+    # Run Spellcheck on all touched files
+    spellingissues=0
+    for file in $(exec git diff --staged --name-only); do
+        if [ -e "$file" ] && grep -i offest "$file" > /dev/null 2>&1; then
+            spellingissues=1
+        fi
+    done
+    if [ $spellingissues == 1 ]; then
+        echo "Spellchecker reported issues."
+        failures=1
+    fi
+fi
 
 ignoreassertstyle=$(git config hooks.ignoreassertstyle)
 if [ "$ignoreassertstyle" != "true" ]; then
