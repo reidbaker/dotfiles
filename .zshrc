@@ -11,6 +11,21 @@ ZSH_THEME="blinks"
 # alias zshconfig="mate ~/.zshrc"
 # alias ohmyzsh="mate ~/.oh-my-zsh"
 
+## git commands ##
+##################
+alias gd="git diff"
+
+## System commands ##
+#####################
+alias apt-s='apt-cache search'
+alias la='ls -alh'
+alias emacskilld="emacsclient -e '(kill-emacs)'"
+alias ack='ack-grep'
+
+## Project commands ##
+######################
+alias cddotfiles='pushd ~/.dotfiles/'
+
 # Set to this to use case-sensitive completion
 # CASE_SENSITIVE="true"
 
