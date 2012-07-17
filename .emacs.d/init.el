@@ -23,7 +23,8 @@
                       flymake
                       flymake-css
                       flymake-jshint
-                      find-file-in-project)
+                      find-file-in-project
+                      markdown-mode)
   "A list of packages to ensure are installed at launch.")
 
 (dolist (p my-packages)
