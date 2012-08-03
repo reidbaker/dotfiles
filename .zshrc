@@ -31,6 +31,14 @@ alias ack='ack-grep'
 ######################
 alias cddotfiles='pushd ~/.dotfiles/'
 
+# Turn on caching, which helps with e.g. apt
+zstyle ':completion:*' use-cache on
+zstyle ':completion:*' cache-path ~/.zsh/cache
+
+# Ignore some common useless files
+zstyle ':completion:*' ignored-patterns '*?.pyc' '__pycache__'
+zstyle ':completion:*:*:rm:*:*' ignored-patterns
+
 # Set to this to use case-sensitive completion
 # CASE_SENSITIVE="true"
 
@@ -45,6 +53,33 @@ alias cddotfiles='pushd ~/.dotfiles/'
 
 # Uncomment following line if you want red dots to be displayed while waiting for completion
 COMPLETION_WAITING_DOTS="true"
+
+## History ##
+#############
+setopt extended_history hist_no_store hist_ignore_dups hist_expire_dups_first hist_find_no_dups inc_append_history share_history hist_reduce_blanks hist_ignore_space
+export HISTFILE=~/.zsh_history
+export HISTSIZE=1000000
+export SAVEHIST=1000000
+
+# Up/down arrow.
+# I want shared history for ^R, but I don't want another shell's activity to
+# mess with up/down.  This does that.
+down-line-or-local-history() {
+    zle set-local-history 1
+    zle down-line-or-history
+    zle set-local-history 0
+}
+zle -N down-line-or-local-history
+up-line-or-local-history() {
+    zle set-local-history 1
+    zle up-line-or-history
+    zle set-local-history 0
+}
+zle -N up-line-or-local-history
+
+bindkey "\e[A" up-line-or-local-history
+bindkey "\e[B" down-line-or-local-history
+
 
 # Which plugins would you like to load? (plugins can be found in ~/.oh-my-zsh/plugins/*)
 # Custom plugins may be added to ~/.oh-my-zsh/custom/plugins/
