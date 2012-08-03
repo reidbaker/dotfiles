@@ -11,6 +11,11 @@ ZSH_THEME="blinks"
 # alias zshconfig="mate ~/.zshrc"
 # alias ohmyzsh="mate ~/.oh-my-zsh"
 
+## Fun commands ##
+##################
+# Thanks to http://coderwall.com/p/hvfvva
+alias fact="elinks -dump randomfunfacts.com | sed -n '/^|/p' | tr -d \|"
+
 ## git commands ##
 ##################
 alias gd="git diff"
