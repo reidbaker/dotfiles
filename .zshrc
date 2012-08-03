@@ -49,3 +49,6 @@ plugins=(git command-not-found pip virtualenvwrapper)
 source $ZSH/oh-my-zsh.sh
 
 # Customize to your needs...
+
+# Set emacs as the editor # This isnt working TODO fix
+export ALTERNATE_EDITOR=emacs EDITOR=emacsclient VISUAL=emacsclient

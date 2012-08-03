@@ -116,7 +116,8 @@
        mac-option-modifier 'meta)
 
 ;; .md files are markdown files
-(setq auto-mode-alist (cons '("\\.md" . markdown-mode) auto-mode-alist))
+(autoload 'markdown-mode "markdown-mode.el" "Major mode for editing Markdown files" t) (setq auto-mode-alist (cons '("\\.md" . markdown-mode) auto-mode-alist))
+
 
 ;; Says files that end in .tmpl should go to html mode
 (add-to-list 'auto-mode-alist '("\\.tmpl$" . html-mode))
