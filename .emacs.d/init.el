@@ -24,7 +24,8 @@
                       flymake-css
                       flymake-jshint
                       find-file-in-project
-                      markdown-mode)
+                      markdown-mode
+                      haskell-mode)
   "A list of packages to ensure are installed at launch.")
 
 (dolist (p my-packages)
@@ -116,10 +117,19 @@
        mac-option-modifier 'meta)
 
 ;; .md files are markdown files
-(autoload 'markdown-mode "markdown-mode.el" "Major mode for editing Markdown files" t) (setq auto-mode-alist (cons '("\\.md" . markdown-mode) auto-mode-alist))
+(autoload 'markdown-mode "markdown-mode.el" "Major mode for editing Markdown files" t) (setq auto-mode-alist (cons '("\\.md" . markdown-mode) auto-mode-alist)
+)
 
+;;processing mode from https://github.com/emacsmirror/processing-mode 
+(add-to-list 'load-path "/home/reid/Documents/hacking/processing-mode/")
+(autoload 'processing-mode "processing-mode" "Processing mode" t)
+(add-to-list 'auto-mode-alist '("\\.pde$" . processing-mode))
+(setq processing-location "/home/reid/Documents/hacking/processing-1.5.1/")
 
 ;; Says files that end in .tmpl should go to html mode
 (add-to-list 'auto-mode-alist '("\\.tmpl$" . html-mode))
+
+;; Get rid of annoying clickable icons at the top
+(if (fboundp 'tool-bar-mode) (tool-bar-mode -1))
 
 (load-theme 'deeper-blue t)
