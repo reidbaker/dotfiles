@@ -8,12 +8,7 @@
   (package-refresh-contents))
 
 ;; things I want installed
-(defvar my-packages '(starter-kit
-                      starter-kit-bindings
-                      starter-kit-eshell
-                      starter-kit-js
-                      smex
-                      pyflakes
+(defvar my-packages '(pyflakes
                       pony-mode
                       paredit
                       magit
