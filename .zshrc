@@ -26,6 +26,8 @@ alias apt-s='apt-cache search'
 alias la='ls -alh'
 alias emacskilld="emacsclient -e '(kill-emacs)'"
 alias ack='ack-grep'
+# use | tr -d '\n' | to strip new lines
+alias cboard='xclip -selection clipboard' # allows piping into pastebuffer
 
 ## Project commands ##
 ######################
