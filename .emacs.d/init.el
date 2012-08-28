@@ -38,7 +38,7 @@
 (defalias 'list-buffers 'ibuffer)
 
 ;; disable visible/visual bell
-;;(setf visible-bell nil)
+(setq visible-bell 1)
 
 ;; disable suspend
 (global-unset-key (kbd "C-z"))
