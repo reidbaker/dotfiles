@@ -115,6 +115,9 @@
 (autoload 'markdown-mode "markdown-mode.el" "Major mode for editing Markdown files" t) (setq auto-mode-alist (cons '("\\.md" . markdown-mode) auto-mode-alist)
 )
 
+;; NO MORE TABS
+(setq-default indent-tabs-mode nil)
+
 ;;processing mode from https://github.com/emacsmirror/processing-mode 
 (add-to-list 'load-path "/home/reid/Documents/hacking/processing-mode/")
 (autoload 'processing-mode "processing-mode" "Processing mode" t)
@@ -126,5 +129,8 @@
 
 ;; Get rid of annoying clickable icons at the top
 (if (fboundp 'tool-bar-mode) (tool-bar-mode -1))
+
+;; No scroll bars
+(scroll-bar-mode -1)
 
 (load-theme 'deeper-blue t)
