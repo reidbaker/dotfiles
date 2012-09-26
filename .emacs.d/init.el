@@ -20,7 +20,8 @@
                       flymake-jshint
                       find-file-in-project
                       markdown-mode
-                      haskell-mode)
+                      haskell-mode
+                      flymake-ruby)
   "A list of packages to ensure are installed at launch.")
 
 (dolist (p my-packages)
