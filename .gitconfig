@@ -12,7 +12,10 @@
 	diff = auto
 	interactive = auto
 	status = auto
+	ui = 1
 [core]
         editor = emacs
 [alias]
 	lg = log --color --graph --pretty=format:'%Cred%h%Creset -%C(yellow)%d%Creset %s %Cgreen(%cr) %C(bold blue)<%an>%Creset' --abbrev-commit --
+[help]
+	autocorrect = 1
