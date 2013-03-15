@@ -82,6 +82,13 @@ zle -N up-line-or-local-history
 bindkey "\e[A" up-line-or-local-history
 bindkey "\e[B" down-line-or-local-history
 
+## Addition's to path ##
+export PATH=~/android-sdk/platform-tools:$PATH
+export PATH=~/android-sdk/tools:$PATH
+
+## Enviroment Variables
+export ANDROID_HOME=~/android-sdk/
+export NEWRELIC_HOME=~/Documents/school/thelastcrusade/third_party/newrelic-android-1.332
 
 # Which plugins would you like to load? (plugins can be found in ~/.oh-my-zsh/plugins/*)
 # Custom plugins may be added to ~/.oh-my-zsh/custom/plugins/
@@ -94,6 +101,3 @@ source $ZSH/oh-my-zsh.sh
 
 # Set emacs as the editor # This isnt working TODO fix
 export ALTERNATE_EDITOR=emacs EDITOR=emacsclient VISUAL=emacsclient
-
-# Sbt for scala
-PATH=$PATH:$HOME/Documents/hacking/sbt/bin/
