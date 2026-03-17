@@ -6,6 +6,8 @@ description:
 
 # Dependabot android instructions 
 
+<!-- TODO packages needs some documenation folder that describes the folder structure -->
+
 ## Gather information about the pull request
 
 Github urls take the form of https://github.com/flutter/packages/pull/<pull-request-id>. Where pull-request-id is a number. 
@@ -88,10 +90,11 @@ You can check out a pull request by using `gh pr checkout <pull-request-id>`
 
 Using the <location> and <current-version> from the pr title follow the instructions in https://raw.githubusercontent.com/flutter/flutter/refs/heads/master/docs/ecosystem/contributing/README.md for how to update the CHANGELOG.md and pubspec.yaml. 
 
-TODO should this say dart run script/tool/bin/flutter_plugin_tools.dart update-release-info --version=minimal --changelog="Updates Java compatibility version to 17 and minimum supported SDK version to Flutter 3.35/Dart 3.9"  --base-branch=50b804adaa5e17bdf4aa9fba14c0bc1629545313 insetad? 
+<!-- TODO should this say dart run script/tool/bin/flutter_plugin_tools.dart update-release-info --version=minimal --changelog="Updates Java compatibility version to 17 and minimum supported SDK version to Flutter 3.35/Dart 3.9"  --base-branch=50b804adaa5e17bdf4aa9fba14c0bc1629545313 insetad -->
 
 Commit the changes to CHANGELOG.md and pubspec.yaml with a message in the format "Bump version and add changelog entry for <package>"
 
 Validate the change by running `dart run script/tool/bin/flutter_plugin_tools.dart version-check` 
+<-- TODO Should this talk about limiting the command to the package in question-->
 
 If version-check passes for <package> inform the user that you have made the changes locally and the pr is ready to be pushed. If version-check fails provide your best reason for why your changes failed as output to the user. 
