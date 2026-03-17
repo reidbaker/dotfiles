@@ -3,12 +3,32 @@ name: dependabot-android
 description:
   Expertise in updating generated pull requests from dependabot to pass flutter packages presubmits. Use when user mentions updating dependabot, fixing dependabot or fixing dependabot pull requests in flutter/packages. Do not use when user want to fix flutter packages that do not reference dependabot. 
 ---
-
+<!-- 
+Host assumptions:
+    Installed and on path:
+        * dart
+        * git
+        * gh
+    Had authenticaion setup:
+        * gh
+-->
 # Dependabot android instructions 
 
 <!-- TODO packages needs some documenation folder that describes the folder structure -->
+*Context*
+flutter/packages repo has the following folder structure.
+* script/ contains utilities for working on or with the repository.
+** script/configs contains yaml configuration files that are used in ci to include or exclude packages from different checks.
+** scripts/tool contains a dart command line package that is used for package manipulation.
+* packages/ contains dart packages and flutter plugins that are maintained by the flutter team. Each folder is either a dart packages or a root directory for a group of flutter plugins.
+* Flutter plugins in packages have subfolders that have the prefix of their parent folder. For example packages/google_maps_flutter has subfolders google_maps_flutter_android, google_maps_flutter_ios, google_maps_flutter_web.
 
-## Gather information about the pull request
+*Rules*
+You should only modify files in packages/.
+You should only modify packages that have had dependencies updated.
+You should not rebase or merge branches.
+
+## Fetch information about the pull request
 
 Github urls take the form of https://github.com/flutter/packages/pull/<pull-request-id>. Where pull-request-id is a number. 
 
@@ -25,6 +45,8 @@ Ignore tree-status failures for the purpose of fixing dependabot prs.
 
 Find failing tests with `gh pr checks <pull-request-id> --repo flutter/packages --json bucket,completedAt,description,event,link,name,startedAt,state,workflow --jq '.[] | select(.bucket == "fail")'`
 
+<!-- TODO break out logic for how to get information from our ci system into its own skill -->
+
 To find information about the specific failure take the url listed in "link" for the "Linux repo_check" named failure. 
 That link takes the format `"link": "https://cr-buildbucket.appspot.com/build/<build-id>",`
 
@@ -35,6 +57,8 @@ Then turn the build-id into a <buildNumber> by calling
 
 Continuing the example that would be 
 `curl https://cr-buildbucket.appspot.com/prpc/buildbucket.v2.Builds/GetBuild --json '{"id":"8687185218015310689"}'`
+
+<!-- TODO describe evaluating if a "lot of tests failed" or if only a small number that indicates the failure is simple -->
 
 That will return a json strings of the format
 ```
@@ -57,7 +81,9 @@ That will return a json strings of the format
 ```
 The value in the "number" field is the <buildNumber>. 
 
-The use the <buildNumber> to get the test logs metadata by running the following command. 
+The use the <buildNumber> to get the test logs metadata by running the following command.
+
+<!-- TODO include a .gitignored directory where agent can dump local files in flutter/packages -->
 
 ```
 curl 'https://cr-buildbucket.appspot.com/prpc/buildbucket.v2.Builds/GetBuild' \
@@ -79,23 +105,35 @@ curl 'https://cr-buildbucket.appspot.com/prpc/buildbucket.v2.Builds/GetBuild' \
   -H 'x-return-encrypted-headers: all' \
   --data-raw '{"builder":{"project":"flutter","bucket":"try","builder":"Linux_android Linux repo_checks master"},"buildNumber":<buildNumber>,"mask":{"fields":"id,builder,builderInfo,number,canceledBy,createdBy,createTime,startTime,endTime,cancelTime,status,statusDetails,summaryMarkdown,output,steps,tags,schedulingTimeout,executionTimeout,gracePeriod,ancestorIds,retriable"}}'
 ```
-Ignore the characters `)]}'` that start the response and treat the rest like json. 
+Ignore the characters `)]}'` that start the response and treat the rest like json.
 
 Inspect the result and look for "Tasks failed: CHANGELOG and version validation"
 
-You now know that this is a simple dependabot change. 
+You now know that this is a simple dependabot change.
 
 To fix a simple dependabot change check out the pull request.
 You can check out a pull request by using `gh pr checkout <pull-request-id>`
 
-Using the <location> and <current-version> from the pr title follow the instructions in https://raw.githubusercontent.com/flutter/flutter/refs/heads/master/docs/ecosystem/contributing/README.md for how to update the CHANGELOG.md and pubspec.yaml. 
+Find the branch point hash by running `git merge-base HEAD origin/main`.
+Find the code modified by dependabot by running `git diff main...HEAD`
+Find the <modified-packages> from the files that were in the diff.
 
-<!-- TODO should this say dart run script/tool/bin/flutter_plugin_tools.dart update-release-info --version=minimal --changelog="Updates Java compatibility version to 17 and minimum supported SDK version to Flutter 3.35/Dart 3.9"  --base-branch=50b804adaa5e17bdf4aa9fba14c0bc1629545313 insetad -->
+<!-- TODO find a better way to describe how to get a list of touched packages from a diff, maybe  -->
+<!-- TODO make this not android specific --> 
+For example:
+If the diff touched the flutter plugin `packages/image_picker/image_picker_android/android/build.gradle`
+then <modified-packages> would be `image_picker_android`.
+If the diff touched the dart package `packages/go_router/pubspec.yaml` then the <modified-packages> is `go_router`.
+If the diff touched `packages/google_sign_in/google_sign_in_android/android/build.gradle` and `packages/image_picker/image_picker_android/android/build.gradle` and `packages/go_router/pubspec.yaml` then the <modified-packages> would be a comma seperated list `google_sign_in_android,image_picker_android,go_router`.
 
-Update the pubspec.yaml with the new version number.
+All simple dependabot updates are a minimal version change.
+
+Update the pubspec.yaml and changelog with the following command.
+`dart run script/tool/bin/flutter_plugin_tools.dart update-release-info --version=minimal --changelog="Bumps <dependency> from <past-version> to <current-version>"  --base-branch=$(git merge-base HEAD origin/main)`
+
 Commit the changes to CHANGELOG.md with a message in the format "Bumps version and add changelog entry for <package>".
 
-Validate the change by running `dart run script/tool/bin/flutter_plugin_tools.dart version-check` 
-<-- TODO Should this talk about limiting the command to the package in question-->
+Validate the change by comparing the files modified with the instructions in https://raw.githubusercontent.com/flutter/flutter/refs/heads/master/docs/ecosystem/contributing/README.md that cover how to update the CHANGELOG.md and pubspec.yaml. 
+Validate the change by running `dart run script/tool/bin/flutter_plugin_tools.dart version-check --packages=<modified-packages>` 
 
-If version-check passes for <package> inform the user that you have made the changes locally and the pr is ready to be pushed. If version-check fails provide your best reason for why your changes failed as output to the user. 
+If version-check passes for <modified-packages> inform the user that you have made the changes locally and the pr is ready to be pushed. If version-check fails provide your best reason for why your changes failed as output to the user. 
