@@ -92,7 +92,8 @@ Using the <location> and <current-version> from the pr title follow the instruct
 
 <!-- TODO should this say dart run script/tool/bin/flutter_plugin_tools.dart update-release-info --version=minimal --changelog="Updates Java compatibility version to 17 and minimum supported SDK version to Flutter 3.35/Dart 3.9"  --base-branch=50b804adaa5e17bdf4aa9fba14c0bc1629545313 insetad -->
 
-Commit the changes to CHANGELOG.md and pubspec.yaml with a message in the format "Bump version and add changelog entry for <package>"
+Update the pubspec.yaml with the new version number.
+Commit the changes to CHANGELOG.md with a message in the format "Bumps version and add changelog entry for <package>".
 
 Validate the change by running `dart run script/tool/bin/flutter_plugin_tools.dart version-check` 
 <-- TODO Should this talk about limiting the command to the package in question-->
