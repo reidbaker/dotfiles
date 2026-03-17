@@ -103,7 +103,7 @@ curl 'https://cr-buildbucket.appspot.com/prpc/buildbucket.v2.Builds/GetBuild' \
   -H 'sec-fetch-site: cross-site' \
   -H 'user-agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36' \
   -H 'x-return-encrypted-headers: all' \
-  --data-raw '{"builder":{"project":"flutter","bucket":"try","builder":"Linux_android Linux repo_checks master"},"buildNumber":<buildNumber>,"mask":{"fields":"id,builder,builderInfo,number,canceledBy,createdBy,createTime,startTime,endTime,cancelTime,status,statusDetails,summaryMarkdown,output,steps,tags,schedulingTimeout,executionTimeout,gracePeriod,ancestorIds,retriable"}}'
+  --data-raw '{"builder":{"project":"flutter","bucket":"try","builder":"Linux repo_checks"},"buildNumber":<buildNumber>,"mask":{"fields":"id,builder,builderInfo,number,canceledBy,createdBy,createTime,startTime,endTime,cancelTime,status,statusDetails,summaryMarkdown,output,steps,tags,schedulingTimeout,executionTimeout,gracePeriod,ancestorIds,retriable"}}'
 ```
 Ignore the characters `)]}'` that start the response and treat the rest like json.
 
