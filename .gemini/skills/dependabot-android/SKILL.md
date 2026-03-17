@@ -116,10 +116,8 @@ You can check out a pull request by using `gh pr checkout <pull-request-id>`
 
 Find the branch point hash by running `git merge-base HEAD origin/main`.
 Find the code modified by dependabot by running `git diff main...HEAD`
-Find the <modified-packages> from the files that were in the diff.
+Find the <modified-packages> from the files that were in the diff by running `dart run script/tool/bin/flutter_plugin_tools.dart version-check --check-for-missing-changes --base-branch=$(git merge-base HEAD origin/main)` packages that print an error with "No version change found" need to be updated.
 
-<!-- TODO find a better way to describe how to get a list of touched packages from a diff, maybe  -->
-<!-- TODO make this not android specific --> 
 For example:
 If the diff touched the flutter plugin `packages/image_picker/image_picker_android/android/build.gradle`
 then <modified-packages> would be `image_picker_android`.
