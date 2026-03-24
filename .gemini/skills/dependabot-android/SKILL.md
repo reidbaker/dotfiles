@@ -1,7 +1,6 @@
 ---
 name: dependabot-android
-description:
-  Fix dependabot PRs in flutter/packages that fail CI due to missing CHANGELOG/version bumps. Use when user mentions dependabot, fixing dependabot PRs, or version-check failures in flutter/packages. Do not use for non-dependabot flutter package issues.
+description: Fix dependabot PRs in flutter/packages that fail CI due to missing CHANGELOG/version bumps. Use when user mentions dependabot, fixing dependabot PRs, or version-check failures in flutter/packages. Do not use for non-dependabot flutter package issues.
 ---
 
 # Dependabot Android Fix
@@ -71,6 +70,14 @@ dart run script/tool/bin/flutter_plugin_tools.dart update-release-info \
   --changelog="Bumps <dep> from <old> to <new>" \
   --base-branch=$(git merge-base HEAD origin/main)
 
+#### 5.1 Handle cross-file version synchronization
+Check `pubspec.yaml` for comments indicating that the version must match native files (e.g., `android/.../AdsRequestProxyApi.kt` or `ios/.../AdsRequestProxyAPIDelegate.swift`).
+
+If such requirements exist:
+1. Identify the new version from `pubspec.yaml`.
+2. Locate the corresponding `pluginVersion` constant in the native files.
+3. Update the native files for the platform being bumped (e.g., Android) to match the new version. *Avoid updating other platforms (like iOS) unless explicitly required by CI failures.*
+
 Commit with message: Bumps version and add changelog entry for <package>.
 
 ### 6. Validate
@@ -78,5 +85,10 @@ Commit with message: Bumps version and add changelog entry for <package>.
 Cross-check changes against https://raw.githubusercontent.com/flutter/flutter/refs/heads/master/docs/ecosystem/contributing/README.md for CHANGELOG/pubspec conventions.
 bash
 dart run script/tool/bin/flutter_plugin_tools.dart version-check --packages=<modified-packages>
+
+#### 6.1 Run version tests
+If a `test/version_test.dart` exists in the package, run it to ensure synchronization:
+bash
+flutter test test/version_test.dart
 
 If passes → tell user changes are ready to push. If fails → explain why.
