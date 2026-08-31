@@ -1,0 +1,14 @@
+{
+  "source": "https://github.com/kevmoo/dash_skills.git",
+  "license": "Apache-2.0",
+  "skills": [
+    "dart-best-practices",
+    "dart-doc-validation",
+    "dart-long-lines",
+    "dart-matcher-best-practices",
+    "dart-modern-features",
+    "dart-package-maintenance",
+    "dart-test-coverage",
+    "dart-test-fundamentals"
+  ]
+}

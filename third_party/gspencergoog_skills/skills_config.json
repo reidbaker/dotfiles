@@ -1,0 +1,11 @@
+{
+  "source": "https://github.com/gspencergoog/skills.git",
+  "license": "Apache-2.0",
+  "skills": [
+    "api-review",
+    "code-documentation",
+    "code-review",
+    "unix-cli-best-practices",
+    "write-prose"
+  ]
+}

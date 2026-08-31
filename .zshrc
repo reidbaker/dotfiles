@@ -101,3 +101,9 @@ source $ZSH/oh-my-zsh.sh
 
 # Set emacs as the editor # This isnt working TODO fix
 export ALTERNATE_EDITOR=emacs EDITOR=emacsclient VISUAL=emacsclient
+
+# Local / sensitive environment overrides (not checked into git)
+if [ -f "$HOME/.zshrc.local" ]; then
+    source "$HOME/.zshrc.local"
+fi
+

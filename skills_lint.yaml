@@ -1,0 +1,15 @@
+skills_lint:
+  rules:
+    check-relative-paths: error
+    check-absolute-paths: error
+    valid-yaml-metadata: error
+    invalid-skill-name: error
+    description-too-long: error
+  directories:
+    - path: ".agents/skills"
+    - path: "third_party/superpowers/skills"
+    - path: "third_party/dash_skills/skills"
+    - path: "third_party/dart_skills/skills"
+    - path: "third_party/mattpocock_skills/skills"
+    - path: "third_party/gspencergoog_skills/skills"
+    - path: "third_party/android_skills/skills"

@@ -1,4 +1,4 @@
-﻿# Compiled source #
+# Compiled source #
 ###################
 *.class
 *.pyc
@@ -42,7 +42,8 @@ Thumbs.db
 # Generated files #
 ###################
 gen/
-bin/
+build/
+
 
 # Eclipse files #
 #################
@@ -51,3 +52,9 @@ bin/
 # Emacs Files #
 ###############
 .#*
+
+# Dart tool #
+#############
+.dart_tool/
+.config/
+.gemini/

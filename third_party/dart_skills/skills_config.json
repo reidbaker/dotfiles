@@ -1,0 +1,8 @@
+{
+  "source": "https://github.com/dart-lang/skills.git",
+  "license": "BSD-3-Clause",
+  "skills": [
+    "dart-build-cli-app",
+    "dart-migrate-to-checks-package"
+  ]
+}
