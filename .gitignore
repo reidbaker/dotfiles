@@ -41,8 +41,8 @@ Thumbs.db
 
 # Generated files #
 ###################
-gen/
-build/
+/gen/
+/build/
 
 
 # Eclipse files #
