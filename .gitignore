@@ -58,3 +58,8 @@ Thumbs.db
 .dart_tool/
 .config/
 .gemini/
+# Skill configuration
+.agents/skills/*/resources/config.yaml
+.agents/skills/*/resources/.*cache.json
+*.cache.json
+*.local.yaml

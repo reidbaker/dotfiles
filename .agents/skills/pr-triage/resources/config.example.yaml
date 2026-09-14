@@ -1,0 +1,86 @@
+# PR triage configuration.
+#
+# Copy this file to config.yaml and edit it. config.yaml is gitignored so
+# your accounts and per-PR notes stay local.
+
+# GitHub accounts you own. Each is searched separately: GitHub combines
+# search qualifiers with AND, so "author:a author:b" matches nothing.
+accounts:
+  - your-github-login
+
+# PRs outside these organizations are demoted. Repositories owned by one of
+# your own accounts are demoted further as personal forks or POCs.
+primary_orgs:
+  - flutter
+  - dart-lang
+
+# Specific repositories to treat as primary regardless of owner.
+primary_repos: []
+
+# Organizations whose members count as teammates. Member logins are resolved
+# at runtime via `gh api graphql` and cached for 24 hours next to this file.
+# Requires the read:org scope; without it the static team_members list below
+# is used instead.
+team_orgs:
+  - flutter
+
+# Extra teammate logins, merged with anything resolved from team_orgs.
+team_members: []
+
+# Repositories that gate presubmit CI behind a trigger label, and the label
+# that starts the run. Scoped per repository because the label does not exist
+# everywhere: applying it globally told every dart-lang PR to add a "CICD"
+# label that returns 404 there.
+presubmit_triggers:
+  flutter/flutter: CICD
+  flutter/packages: CICD
+
+# Labels meaning CI cannot proceed until something external resolves.
+# These block; they are not something you can act on.
+cicd_blocked_labels:
+  - "waiting for tree to go green"
+  - "waiting for code freeze"
+  - "waiting for tree status"
+
+# Labels meaning the ball is in the author's court.
+waiting_labels:
+  - "waiting for author"
+  - "waiting for pr author"
+  - "waiting for response"
+  - "work in progress (do not review)"
+
+# Labels meaning the contributor has not signed the CLA.
+# Values containing ":" must be quoted, otherwise YAML parses
+# "- cla: no" as a map and the entry matches no real label.
+cla_missing_labels:
+  - "cla: no"
+  - "needs cla"
+  - "cla missing"
+
+# Dates excluded from business-day arithmetic alongside weekends.
+holidays: []
+
+# Per-PR annotations. A bare string is a note only; burying a PR requires an
+# explicit "demote: true".
+pr_overrides: {}
+  # "flutter/flutter#12345":
+  #   demote: true
+  #   action: "[Action: Delete when the migration bug is closed]"
+  #   note: "Exploratory POC, not intended to land."
+
+# Business days a review request may sit unanswered before it is stalled.
+stale_review_business_days: 3
+
+# Substrings in check names treated as infrastructure flakes.
+flaky_test_keywords:
+  - flaky
+  - tree-status
+  - mac_android
+  - flakiness
+
+# Also search "assignee:" alongside "review-requested:". Off by default
+# because it doubles the query count and returns nothing on Flutter repos.
+search_assignee: false
+
+# Max PRs fetched per search. GitHub caps this at 100.
+query_limit: 50
