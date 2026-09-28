@@ -19,5 +19,5 @@ alias ack='ack-grep'
 ######################
 alias gotoetest='cd /home/reid/Documents/work/techTeam/etest'
 alias gotomatlab='cd /home/reid/Documents/MATLAB'
-alias gotodotfiles='cd /home/reid/.dotfiles'
+alias gotodotfiles='cd ~/devconfig'
 alias gotoresume='cd /home/reid/Documents/interviewStuff/resume'

@@ -53,10 +53,10 @@ dart run bin/sync_agents.dart
 Symlink dotfiles into your home directory:
 
 ```bash
-ln -sf ~/dotfiles/.zshrc ~/.zshrc
-ln -sf ~/dotfiles/.gitconfig ~/.gitconfig
-ln -sf ~/dotfiles/.bash_aliases ~/.bash_aliases
-ln -sf ~/dotfiles/.vimrc ~/.vimrc
+ln -sf ~/devconfig/.zshrc ~/.zshrc
+ln -sf ~/devconfig/.gitconfig ~/.gitconfig
+ln -sf ~/devconfig/.bash_aliases ~/.bash_aliases
+ln -sf ~/devconfig/.vimrc ~/.vimrc
 ```
 
 ### 3. Machine Secrets & Authentication Setup

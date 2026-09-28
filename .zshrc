@@ -31,7 +31,7 @@ alias cboard='xclip -selection clipboard' # allows piping into pastebuffer
 
 ## Project commands ##
 ######################
-alias cddotfiles='pushd ~/.dotfiles/'
+alias cddotfiles='pushd ~/devconfig/'
 
 # Turn on caching, which helps with e.g. apt
 zstyle ':completion:*' use-cache on

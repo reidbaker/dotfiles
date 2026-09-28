@@ -39,7 +39,7 @@ if [ "$ignoreassertstyle" != "true" ]; then
     echo "Checking for poor assert style..."
     assertissues=0
     for file in $(exec git diff --staged --name-only | grep '\.py$'); do
-        if [ -e "$file" ] && ! ~/.dotfiles/check_asserts -q "$file"; then
+        if [ -e "$file" ] && ! ~/devconfig/check_asserts -q "$file"; then
             echo "Bad assert style in $file"
             assertissues=1
         fi
