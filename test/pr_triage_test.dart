@@ -42,6 +42,7 @@ PrItem pr({
   List<String> requestedReviewers = const [],
   List<String> requestedTeams = const [],
   List<String> assignedReviewers = const [],
+  List<PrComment> recentComments = const [],
 }) {
   final created = createdAt ?? kNow.subtract(const Duration(days: 1));
   return PrItem(
@@ -68,11 +69,19 @@ PrItem pr({
     requestedReviewers: requestedReviewers,
     requestedTeams: requestedTeams,
     assignedReviewers: assignedReviewers,
+    recentComments: recentComments,
   );
 }
 
 PrReview review(String author, String state, DateTime at) =>
     PrReview(author: author, state: state, submittedAt: at);
+
+PrComment comment(String author, String body, DateTime at) =>
+    PrComment.fromJson({
+      'author': {'login': author},
+      'body': body,
+      'createdAt': at.toIso8601String(),
+    });
 
 void main() {
   group('TriageConfig parsing', () {
@@ -150,15 +159,20 @@ cla_missing_labels:
       final defaults = TriageConfig.fromYamlString('accounts: [me]');
       expect(defaults.crowdedReviewThreshold, 4);
       expect(defaults.staleCoReviewerBusinessDays, 10);
+      expect(defaults.mentionWindowBusinessDays, 10);
 
       final custom = TriageConfig.fromYamlString(
         'accounts: [me]\n'
         'crowded_review_threshold: 6\n'
-        'stale_co_reviewer_business_days: 7',
+        'stale_co_reviewer_business_days: 7\n'
+        'mention_window_business_days: 3',
       );
       expect(custom.crowdedReviewThreshold, 6);
       expect(custom.staleCoReviewerBusinessDays, 7);
+      expect(custom.mentionWindowBusinessDays, 3);
       expect(custom.withTeamMembers(['x']).staleCoReviewerBusinessDays, 7);
+      expect(custom.withTeamMembers(['x']).mentionWindowBusinessDays, 3);
+      expect(custom.toJson()['mention_window_business_days'], 3);
     });
   });
 
@@ -957,6 +971,204 @@ cla_missing_labels:
         kConfig,
       );
       expect(item.tier, ReviewQueueTier.teamReviewRequest);
+    });
+  });
+
+  group('PR comment mentions', () {
+    test('parses logins, ignoring emails and team mentions', () {
+      expect(
+        PrComment.mentionedLogins(
+          '/cc @ReidBaker and @flutter/android-reviewers; '
+          'mail x@reidbaker.dev. Thanks @gmackall.',
+        ),
+        ['reidbaker', 'gmackall'],
+      );
+    });
+
+    test('PrItem.fromJson reads GraphQL comment nodes and round-trips', () {
+      final item = PrItem.fromJson({
+        'number': 7,
+        'comments': {
+          'nodes': [
+            {
+              'author': {'login': 'cbracken'},
+              'body': '/cc @reidbaker for Android review',
+              'createdAt': '2026-01-14T15:00:00Z',
+            },
+          ],
+        },
+      });
+      final c = item.recentComments.single;
+      expect(c.author, 'cbracken');
+      expect(c.mentions, ['reidbaker']);
+      expect(c.excerpt, '/cc @reidbaker for Android review');
+
+      final again = PrComment.fromJson(c.toJson());
+      expect(again.mentions, ['reidbaker']);
+      expect(again.author, 'cbracken');
+      expect(again.createdAt, c.createdAt);
+    });
+
+    test('the fetcher maps reviews to allReviews and keeps comments', () async {
+      final runner = _RecordingRunner(
+        response: '''
+{"data":{"search":{"issueCount":1,"nodes":[{
+  "number": 12357,
+  "repository": {"nameWithOwner": "flutter/packages"},
+  "author": {"login": "stranger"},
+  "reviews": {"nodes": [
+    {"author": {"login": "reidbaker"}, "state": "COMMENTED",
+     "submittedAt": "2026-01-05T10:00:00Z"}
+  ]},
+  "comments": {"nodes": [
+    {"author": {"login": "cbracken"}, "body": "/cc @reidbaker",
+     "createdAt": "2026-01-14T10:00:00Z"}
+  ]}
+}]}}}''',
+      );
+      final result = await GitHubPrFetcher(runner: runner.call)
+          .fetchReviewQueue(reviewers: ['reidbaker']);
+      final item = result.items.single;
+      expect(item.allReviews.single.author, 'reidbaker');
+      expect(item.recentComments.single.author, 'cbracken');
+    });
+  });
+
+  group('Review Queue: asked by @-mention', () {
+    // kNow is Thursday 2026-01-15; 2026-01-01 is 10 business days earlier.
+    PrItem askedShape({
+      required List<PrComment> comments,
+      List<PrReview> allReviews = const [],
+      List<String> requestedReviewers = const ['LongCatIsLooong', 'reidbaker'],
+      List<String> requestedTeams = const [],
+      bool isDraft = false,
+      DateTime? headCommitDate,
+    }) => pr(
+      repo: 'flutter/packages',
+      author: 'stranger',
+      isDraft: isDraft,
+      mergeable: 'CONFLICTING',
+      ciStatus: CiStatus.failing,
+      totalCheckCount: 3,
+      failingChecks: ['analyze'],
+      requestedReviewers: requestedReviewers,
+      requestedTeams: requestedTeams,
+      headCommitDate: headCommitDate,
+      latestReviews: [
+        review('mdebbar', 'APPROVED', DateTime(2026, 1, 6)),
+        review('stuartmorgan-g', 'APPROVED', DateTime(2026, 1, 7)),
+        review('vashworth', 'COMMENTED', DateTime(2026, 1, 8)),
+      ],
+      allReviews: allReviews,
+      recentComments: comments,
+    );
+
+    test('a direct ask outranks conflicts and failing CI', () {
+      final item = classifier().classifyReviewQueue(
+        askedShape(
+          comments: [
+            comment(
+              'cbracken',
+              '/cc @reidbaker for Android review',
+              DateTime(2026, 1, 14, 9),
+            ),
+          ],
+        ),
+        kConfig,
+      );
+      expect(item.tier, ReviewQueueTier.explicitlyAsked);
+      expect(item.businessDaysElapsed, 1);
+      expect(item.reason, contains('cbracken asked for your review'));
+      expect(item.reason, contains('2 approvals from others'));
+      expect(item.reason, contains('merge conflicts'));
+      expect(item.reason, contains('CI failing'));
+    });
+
+    test('fires at the window edge and not one day past it', () {
+      PrItem at(DateTime when) =>
+          askedShape(comments: [comment('cbracken', '@reidbaker ptal', when)]);
+      expect(
+        classifier()
+            .classifyReviewQueue(at(DateTime(2026, 1, 1, 10)), kConfig)
+            .tier,
+        ReviewQueueTier.explicitlyAsked,
+      );
+      expect(
+        classifier()
+            .classifyReviewQueue(at(DateTime(2025, 12, 31, 10)), kConfig)
+            .tier,
+        ReviewQueueTier.other,
+      );
+    });
+
+    test('a mention you already reviewed after does not fire', () {
+      final item = classifier().classifyReviewQueue(
+        askedShape(
+          requestedReviewers: const ['LongCatIsLooong'],
+          comments: [
+            comment('cbracken', '@reidbaker ptal', DateTime(2026, 1, 12)),
+          ],
+          allReviews: [review('reidbaker', 'COMMENTED', DateTime(2026, 1, 13))],
+          headCommitDate: DateTime(2026, 1, 10),
+        ),
+        kConfig,
+      );
+      expect(item.tier, isNot(ReviewQueueTier.explicitlyAsked));
+    });
+
+    test('ignores mentions written by you or by bots', () {
+      final item = classifier().classifyReviewQueue(
+        askedShape(
+          comments: [
+            comment(
+              'reidbaker-agent',
+              '@reidbaker ptal',
+              DateTime(2026, 1, 14),
+            ),
+            comment(
+              'github-actions[bot]',
+              'Ping @reidbaker',
+              DateTime(2026, 1, 14),
+            ),
+          ],
+        ),
+        kConfig,
+      );
+      expect(item.tier, ReviewQueueTier.other);
+    });
+
+    test('re-review ready still outranks the ask', () {
+      final item = classifier().classifyReviewQueue(
+        askedShape(
+          comments: [
+            comment('cbracken', '@reidbaker ptal', DateTime(2026, 1, 14)),
+          ],
+          allReviews: [review('reidbaker', 'COMMENTED', DateTime(2026, 1, 12))],
+          headCommitDate: DateTime(2026, 1, 13),
+        ),
+        kConfig,
+      );
+      expect(item.tier, ReviewQueueTier.reReviewReady);
+    });
+
+    test('lifts a team-only draft when you are asked by name', () {
+      final item = classifier().classifyReviewQueue(
+        askedShape(
+          isDraft: true,
+          requestedReviewers: const [],
+          requestedTeams: const ['flutter/android-reviewers'],
+          comments: [
+            comment(
+              'cbracken',
+              '@reidbaker early look?',
+              DateTime(2026, 1, 14),
+            ),
+          ],
+        ),
+        kConfig,
+      );
+      expect(item.tier, ReviewQueueTier.explicitlyAsked);
+      expect(item.reason, contains('draft'));
     });
   });
 

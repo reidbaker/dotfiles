@@ -93,41 +93,54 @@ Terms used below:
   assignee, and have never reviewed the PR.
 * **Crowded**: at least `crowded_review_threshold` distinct people other than
   you (requested reviewers plus human reviewers; default 4).
-* **Merge conflicts** rule a PR out of tiers 2, 3 and 5; it falls to Other with
+* **Merge conflicts** rule a PR out of tiers 3, 4 and 6; it falls to Other with
   a "needs rebase" reason instead.
+* **@-mentioned**: a human other than you wrote a PR conversation comment
+  (one of the last 15) that mentions one of the configured accounts. Emails
+  and team mentions such as `@flutter/android-reviewers` do not count; bot
+  comments do not count.
 
 1. **Re-Review Ready (Feedback Addressed)**: You reviewed before, the author
    has pushed since, and a re-review is requested.
    * *Action*: `[Action: Re-review and sign off]`
-2. **Teammate PR Review**: Author is a teammate, resolved from `team_orgs` or
+2. **Asked for Your Review (@-mention)**: You were @-mentioned within
+   `mention_window_business_days` (default 10) and have not reviewed since
+   that comment. Checked before every rule except repository scoping,
+   overrides and Re-Review Ready, so draft state, merge conflicts, failing CI
+   and team-only requests do not bury it. The reason quotes the comment and
+   lists approvals from others, draft state, conflicts and CI failures. Days
+   are counted from the comment.
+   * *Action*: `[Action: Review - you were asked directly]`
+3. **Teammate PR Review**: Author is a teammate, resolved from `team_orgs` or
    listed in `team_members`. CI not failing, no merge conflicts.
    * *Action*: `[Action: Review team PR]`
-3. **Clean External Contributor PR**: Non-teammate, CLA signed, not draft, no
+4. **Clean External Contributor PR**: Non-teammate, CLA signed, not draft, no
    blockers, CI not failing, no merge conflicts.
    * *Action*: `[Action: Review external PR]`
-4. **Waiting on Author Response**: A `waiting_labels` label is applied.
+5. **Waiting on Author Response**: A `waiting_labels` label is applied.
    * *Action*: `[Action: Awaiting author updates]`
-5. **Draft PR in Review Queue**: Review requested on something not yet marked
+6. **Draft PR in Review Queue**: Review requested on something not yet marked
    ready, without merge conflicts.
    * *Action*: `[Action: Deprioritized - Awaiting author to mark ready for review]`
-6. **Co-Reviewer Stalled**: You were asked by name, and another reviewer asked
+7. **Co-Reviewer Stalled**: You were asked by name, and another reviewer asked
    by name has not reviewed for at least `stale_co_reviewer_business_days`
    (default 10), counted from the most recent review request. Not draft, no
    merge conflicts. Failing CI does not rule it out.
    * *Action*: `[Action: Ping co-reviewer(s) or reassign]`
-7. **Blocked External PR (CLA/Blockers)**: Unsigned CLA or blocking reviews
+8. **Blocked External PR (CLA/Blockers)**: Unsigned CLA or blocking reviews
    from the team.
    * *Action*: `[Action: Low priority (blocked)]`
-8. **Review in Repository Not In primary_orgs**
+9. **Review in Repository Not In primary_orgs**
    * *Action*: `[Action: Low urgency - add repo to primary_orgs to promote]`
-9. **Personal Fork Review**
-   * *Action*: `[Action: Fork Review - Low urgency]`
-10. **Other / Backlog**: Includes PRs with merge conflicts or failing CI.
+10. **Personal Fork Review**
+    * *Action*: `[Action: Fork Review - Low urgency]`
+11. **Other / Backlog**: Includes PRs with merge conflicts or failing CI.
     * *Action*: `[Action: Monitor]`
-11. **Team-Only Request (not addressed to you)**: Checked before every rule
-    except repository scoping and overrides, so a team-only draft cannot rank
-    as tier 5. Uncrowded requests sort before crowded ones. The reason names
-    the teams, the head count, and any conflicts or draft state.
+12. **Team-Only Request (not addressed to you)**: Checked before every rule
+    except repository scoping, overrides and the @-mention rule, so a
+    team-only draft cannot rank as tier 6. Uncrowded requests sort before
+    crowded ones. The reason names the teams, the head count, and any
+    conflicts or draft state.
     * *Action*: `[Action: Low priority - team request, not addressed to you]`
 
 ---

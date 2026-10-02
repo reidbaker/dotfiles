@@ -18,8 +18,7 @@ enum CiStatus {
       'FAILED' ||
       'ERROR' ||
       'TIMED_OUT' ||
-      'ACTION_REQUIRED' =>
-        CiStatus.failing,
+      'ACTION_REQUIRED' => CiStatus.failing,
       'PENDING' || 'EXPECTED' || 'IN_PROGRESS' || 'QUEUED' => CiStatus.pending,
       _ => CiStatus.none,
     };
@@ -49,7 +48,8 @@ class PrReview {
     return PrReview(
       author: (json['author']?['login'] ?? json['author'] ?? '').toString(),
       state: (json['state'] ?? 'COMMENTED').toString().toUpperCase(),
-      submittedAt: DateTime.tryParse(json['submittedAt']?.toString() ?? '') ??
+      submittedAt:
+          DateTime.tryParse(json['submittedAt']?.toString() ?? '') ??
           DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
     );
   }
@@ -69,10 +69,70 @@ class PrReview {
   }
 
   Map<String, dynamic> toJson() => {
-        'author': author,
-        'state': state,
-        'submitted_at': submittedAt.toIso8601String(),
-      };
+    'author': author,
+    'state': state,
+    'submitted_at': submittedAt.toIso8601String(),
+  };
+}
+
+/// A conversation comment on a PR, reduced to what triage needs: who wrote
+/// it, when, which logins it @-mentions, and a short excerpt for reasons.
+class PrComment {
+  const PrComment({
+    required this.author,
+    required this.createdAt,
+    this.mentions = const [],
+    this.excerpt = '',
+  });
+
+  factory PrComment.fromJson(Map<String, dynamic> json) {
+    final body = (json['body'] ?? '').toString();
+    final flat = body.replaceAll(RegExp(r'\s+'), ' ').trim();
+    final author = json['author'];
+    return PrComment(
+      author: (author is Map ? author['login'] ?? '' : author ?? '').toString(),
+      createdAt:
+          DateTime.tryParse(
+            (json['createdAt'] ?? json['created_at'])?.toString() ?? '',
+          ) ??
+          DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
+      mentions:
+          (json['mentions'] as List?)?.map((m) => m.toString()).toList() ??
+          mentionedLogins(body),
+      excerpt:
+          (json['excerpt'] ??
+                  (flat.length <= 120 ? flat : '${flat.substring(0, 120)}...'))
+              .toString(),
+    );
+  }
+
+  /// Logins @-mentioned in [body], lower-cased. An `@` preceded by a word
+  /// character (an email address) is not a mention, and neither is a team
+  /// mention such as `@flutter/android-reviewers`.
+  static List<String> mentionedLogins(String body) => [
+    for (final m in _mentionPattern.allMatches(body)) m.group(1)!.toLowerCase(),
+  ];
+
+  static final RegExp _mentionPattern = RegExp(
+    r'(?<![A-Za-z0-9_.-])@([A-Za-z0-9](?:[A-Za-z0-9-]{0,38}))(?![A-Za-z0-9/-])',
+  );
+
+  final String author;
+  final DateTime createdAt;
+  final List<String> mentions;
+  final String excerpt;
+
+  bool get isBot {
+    final lower = author.toLowerCase();
+    return lower.endsWith('[bot]') || kBotReviewerLogins.contains(lower);
+  }
+
+  Map<String, dynamic> toJson() => {
+    'author': author,
+    'created_at': createdAt.toIso8601String(),
+    'mentions': mentions,
+    'excerpt': excerpt,
+  };
 }
 
 /// Represents a Pull Request with all enriched triage metadata.
@@ -102,17 +162,19 @@ class PrItem {
     this.requestedReviewers = const [],
     this.requestedTeams = const [],
     this.assignedReviewers = const [],
+    this.recentComments = const [],
   });
 
   factory PrItem.fromJson(Map<String, dynamic> json) {
-    final repoName = (json['repository']?['nameWithOwner'] ??
-            json['repository']?['name'] ??
-            json['repo'] ??
-            '')
-        .toString();
+    final repoName =
+        (json['repository']?['nameWithOwner'] ??
+                json['repository']?['name'] ??
+                json['repo'] ??
+                '')
+            .toString();
 
-    final authorName =
-        (json['author']?['login'] ?? json['author'] ?? '').toString();
+    final authorName = (json['author']?['login'] ?? json['author'] ?? '')
+        .toString();
 
     final ci = _extractCiInfo(json);
 
@@ -124,34 +186,46 @@ class PrItem {
       author: authorName,
       isDraft: (json['isDraft'] ?? false) as bool,
       mergeable: (json['mergeable'] ?? 'UNKNOWN').toString().toUpperCase(),
-      reviewDecision:
-          (json['reviewDecision'] ?? 'NONE').toString().toUpperCase(),
+      reviewDecision: (json['reviewDecision'] ?? 'NONE')
+          .toString()
+          .toUpperCase(),
       ciStatus: ci.status,
       totalCheckCount: ci.totalCheckCount,
       failingChecks: ci.failingChecks,
-      unresolvedReviewThreads: (json['unresolvedReviewThreads'] ??
-              json['unresolved_review_threads'] ??
-              0) as int,
-      totalReviewThreads: (json['totalReviewThreads'] ??
-              json['total_review_threads'] ??
-              0) as int,
-      unresolvedThreadsExact: (json['unresolvedThreadsExact'] ??
-              json['unresolved_threads_exact'] ??
-              true) as bool,
+      unresolvedReviewThreads:
+          (json['unresolvedReviewThreads'] ??
+                  json['unresolved_review_threads'] ??
+                  0)
+              as int,
+      totalReviewThreads:
+          (json['totalReviewThreads'] ?? json['total_review_threads'] ?? 0)
+              as int,
+      unresolvedThreadsExact:
+          (json['unresolvedThreadsExact'] ??
+                  json['unresolved_threads_exact'] ??
+                  true)
+              as bool,
       labels: _extractLabels(json['labels']),
       updatedAt: _parseDate(json['updatedAt']) ?? DateTime.now(),
       createdAt: _parseDate(json['createdAt']) ?? DateTime.now(),
-      headCommitDate:
-          _parseDate(json['headCommitDate'] ?? json['head_commit_date']),
+      headCommitDate: _parseDate(
+        json['headCommitDate'] ?? json['head_commit_date'],
+      ),
       lastReviewRequestedAt: _parseDate(
-          json['lastReviewRequestedAt'] ?? json['last_review_requested_at']),
+        json['lastReviewRequestedAt'] ?? json['last_review_requested_at'],
+      ),
       latestReviews: _extractReviews(json['latestReviews'] ?? json['reviews']),
       allReviews: _extractReviews(json['allReviews'] ?? json['all_reviews']),
       requestedReviewers: _extractStringList(
-          json['reviewRequests'] ?? json['requestedReviewers']),
-      requestedTeams:
-          _extractTeamList(json['reviewRequests'] ?? json['requestedTeams']),
+        json['reviewRequests'] ?? json['requestedReviewers'],
+      ),
+      requestedTeams: _extractTeamList(
+        json['reviewRequests'] ?? json['requestedTeams'],
+      ),
       assignedReviewers: _extractStringList(json['assignees']),
+      recentComments: _extractComments(
+        json['comments'] ?? json['recent_comments'],
+      ),
     );
   }
 
@@ -200,6 +274,9 @@ class PrItem {
   final List<String> requestedReviewers;
   final List<String> requestedTeams;
   final List<String> assignedReviewers;
+
+  /// The most recent conversation comments (not review-thread comments).
+  final List<PrComment> recentComments;
 
   bool get isApproved => reviewDecision == 'APPROVED';
   bool get isChangesRequested => reviewDecision == 'CHANGES_REQUESTED';
@@ -252,6 +329,18 @@ class PrItem {
     return mine.reduce((a, b) => a.submittedAt.isAfter(b.submittedAt) ? a : b);
   }
 
+  /// The most recent human comment, not written by [logins], that
+  /// @-mentions any login in [logins]; or null.
+  PrComment? latestMentionOf(bool Function(String login) logins) {
+    PrComment? latest;
+    for (final c in recentComments) {
+      if (c.isBot || logins(c.author)) continue;
+      if (!c.mentions.any(logins)) continue;
+      if (latest == null || c.createdAt.isAfter(latest.createdAt)) latest = c;
+    }
+    return latest;
+  }
+
   static DateTime? _parseDate(dynamic value) {
     if (value == null) return null;
     return DateTime.tryParse(value.toString());
@@ -283,6 +372,16 @@ class PrItem {
         .toList();
   }
 
+  static List<PrComment> _extractComments(dynamic commentsJson) {
+    final nodes = _nodesOf(commentsJson);
+    if (nodes == null) return const [];
+    return nodes
+        .whereType<Map<String, dynamic>>()
+        .map(PrComment.fromJson)
+        .where((c) => c.author.isNotEmpty)
+        .toList();
+  }
+
   static List<dynamic>? _nodesOf(dynamic json) {
     if (json is List) return json;
     if (json is Map && json['nodes'] is List) return json['nodes'] as List;
@@ -290,14 +389,15 @@ class PrItem {
   }
 
   static ({CiStatus status, int totalCheckCount, List<String> failingChecks})
-      _extractCiInfo(Map<String, dynamic> json) {
+  _extractCiInfo(Map<String, dynamic> json) {
     final rollup = json['statusCheckRollup'] ?? _headCommitRollup(json);
 
     if (rollup is Map) {
       final status = CiStatus.fromString(rollup['state']?.toString());
       final contextsJson = rollup['contexts'];
       final total = (contextsJson is Map ? contextsJson['totalCount'] : null);
-      final contexts = _nodesOf(contextsJson) ??
+      final contexts =
+          _nodesOf(contextsJson) ??
           (contextsJson is List ? contextsJson : const []);
       return (
         status: status,
@@ -342,8 +442,9 @@ class PrItem {
     final failing = <String>[];
     for (final ctx in contexts) {
       if (ctx is Map) {
-        final state =
-            (ctx['conclusion'] ?? ctx['state'])?.toString().toUpperCase();
+        final state = (ctx['conclusion'] ?? ctx['state'])
+            ?.toString()
+            .toUpperCase();
         if (_isFailingCheckState(state)) {
           final name = (ctx['name'] ?? ctx['context'] ?? '').toString().trim();
           if (name.isNotEmpty) failing.add(name);
@@ -394,28 +495,29 @@ class PrItem {
   }
 
   Map<String, dynamic> toJson() => {
-        'number': number,
-        'title': title,
-        'url': url,
-        'repo': repo,
-        'author': author,
-        'is_draft': isDraft,
-        'mergeable': mergeable,
-        'review_decision': reviewDecision,
-        'ci_status': ciStatus.name,
-        'total_check_count': totalCheckCount,
-        'failing_checks': failingChecks,
-        'unresolved_review_threads': unresolvedReviewThreads,
-        'total_review_threads': totalReviewThreads,
-        'unresolved_threads_exact': unresolvedThreadsExact,
-        'labels': labels,
-        'updated_at': updatedAt.toIso8601String(),
-        'created_at': createdAt.toIso8601String(),
-        'head_commit_date': headCommitDate?.toIso8601String(),
-        'last_review_requested_at': lastReviewRequestedAt?.toIso8601String(),
-        'latest_reviews': latestReviews.map((r) => r.toJson()).toList(),
-        'requested_reviewers': requestedReviewers,
-        'requested_teams': requestedTeams,
-        'assigned_reviewers': assignedReviewers,
-      };
+    'number': number,
+    'title': title,
+    'url': url,
+    'repo': repo,
+    'author': author,
+    'is_draft': isDraft,
+    'mergeable': mergeable,
+    'review_decision': reviewDecision,
+    'ci_status': ciStatus.name,
+    'total_check_count': totalCheckCount,
+    'failing_checks': failingChecks,
+    'unresolved_review_threads': unresolvedReviewThreads,
+    'total_review_threads': totalReviewThreads,
+    'unresolved_threads_exact': unresolvedThreadsExact,
+    'labels': labels,
+    'updated_at': updatedAt.toIso8601String(),
+    'created_at': createdAt.toIso8601String(),
+    'head_commit_date': headCommitDate?.toIso8601String(),
+    'last_review_requested_at': lastReviewRequestedAt?.toIso8601String(),
+    'latest_reviews': latestReviews.map((r) => r.toJson()).toList(),
+    'requested_reviewers': requestedReviewers,
+    'requested_teams': requestedTeams,
+    'assigned_reviewers': assignedReviewers,
+    'recent_comments': recentComments.map((c) => c.toJson()).toList(),
+  };
 }

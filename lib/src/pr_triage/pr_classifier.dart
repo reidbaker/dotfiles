@@ -69,6 +69,17 @@ class PrClassifier {
     );
     if (scoped != null) return scoped;
 
+    // Someone asking you by @-mention is checked before the team-only, draft,
+    // conflict and CI rules: those describe the PR, but the comment is a
+    // direct request for your attention.
+    final asked = _checkExplicitlyAsked(pr, config);
+    if (asked != null) {
+      return _annotate(
+        _lowestRank([?_checkReReviewReady(pr, config, days), asked]),
+        override,
+      );
+    }
+
     final signals = _ReviewSignals.of(pr, config);
 
     // A request that reached you only through a team is checked before the
@@ -337,7 +348,53 @@ class PrClassifier {
     );
   }
 
-  /// Tier 2.
+  /// Tier 2: a human @-mentioned one of your accounts in a PR comment within
+  /// [TriageConfig.mentionWindowBusinessDays], and you have not reviewed
+  /// since.
+  ///
+  /// Draft state, merge conflicts and CI status do not rule this out: the
+  /// person asking may want an early design read, and the reason string
+  /// reports those states so you can judge.
+  TriagedItem? _checkExplicitlyAsked(PrItem pr, TriageConfig config) {
+    final mention = pr.latestMentionOf(config.isMyAccount);
+    if (mention == null) return null;
+
+    final mine = pr.latestReviewBy(config.isMyAccount);
+    if (mine != null && !mention.createdAt.isAfter(mine.submittedAt)) {
+      return null;
+    }
+
+    final since = calculateBusinessDays(
+      mention.createdAt,
+      _now,
+      holidays: config.holidays,
+    );
+    if (since > config.mentionWindowBusinessDays) return null;
+
+    final approvals = pr.humanReviews
+        .where((r) => r.isApproved && !config.isMyAccount(r.author))
+        .map((r) => r.author.toLowerCase())
+        .toSet()
+        .length;
+    final parts = <String>[
+      '${mention.author} asked for your review $since business days ago '
+          '("${mention.excerpt}")',
+      if (approvals > 0)
+        '$approvals approval${approvals == 1 ? '' : 's'} from others',
+      if (pr.isDraft) 'draft',
+      if (pr.isMergeBlocked) 'merge conflicts',
+      if (pr.hasFailingCi) 'CI failing',
+    ];
+    return _buildItem(
+      pr: pr,
+      queue: QueueType.reviewQueue,
+      tier: ReviewQueueTier.explicitlyAsked,
+      reason: parts.join('; '),
+      days: since,
+    );
+  }
+
+  /// Tier 3.
   TriagedItem? _checkTeamReview(PrItem pr, int days, _ReviewSignals s) {
     if (!s.isTeamAuthor || s.isBlocked || s.waitingOnAuthor) return null;
     if (pr.hasFailingCi || pr.isMergeBlocked) return null;
@@ -351,7 +408,7 @@ class PrClassifier {
     );
   }
 
-  /// Tier 3.
+  /// Tier 4.
   TriagedItem? _checkCleanExternal(PrItem pr, int days, _ReviewSignals s) {
     if (s.isTeamAuthor || s.isBlocked || s.waitingOnAuthor) return null;
     if (pr.hasFailingCi || pr.isMergeBlocked) return null;
@@ -365,7 +422,7 @@ class PrClassifier {
     );
   }
 
-  /// Tier 4.
+  /// Tier 5.
   TriagedItem? _checkWaitingOnAuthor(PrItem pr, int days, _ReviewSignals s) {
     if (s.claMissing) return null;
     final teamAuthorBlocked = s.isTeamAuthor && s.blockers.isNotEmpty;
@@ -381,7 +438,7 @@ class PrClassifier {
     );
   }
 
-  /// Tier 6. You were asked by name and another individually requested
+  /// Tier 7. You were asked by name and another individually requested
   /// reviewer has not reviewed in [TriageConfig.staleCoReviewerBusinessDays].
   ///
   /// Failing CI does not rule this out: a ping is useful either way. The age
@@ -407,7 +464,7 @@ class PrClassifier {
     );
   }
 
-  /// Tier 11. The request reached you only through a team.
+  /// Tier 12. The request reached you only through a team.
   TriagedItem _teamOnlyItem(PrItem pr, int days, _ReviewSignals s) {
     final parts = <String>[
       'Requested from ${pr.requestedTeams.join(', ')} (not you)',
@@ -424,7 +481,7 @@ class PrClassifier {
     );
   }
 
-  /// Tier 7. Emits an honest reason naming whichever condition actually
+  /// Tier 8. Emits an honest reason naming whichever condition actually
   /// matched, instead of always claiming a CLA problem.
   TriagedItem? _checkBlockedExternal(PrItem pr, int days, _ReviewSignals s) {
     if (!s.isBlocked) return null;

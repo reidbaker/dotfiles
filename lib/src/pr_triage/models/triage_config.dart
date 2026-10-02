@@ -126,6 +126,7 @@ class TriageConfig {
     this.searchAssignee = false,
     this.crowdedReviewThreshold = 4,
     this.staleCoReviewerBusinessDays = 10,
+    this.mentionWindowBusinessDays = 10,
   });
 
   /// Factory that builds a default config around the current GitHub user.
@@ -188,6 +189,10 @@ class TriageConfig {
         'stale_co_reviewer_business_days',
         'staleCoReviewerBusinessDays',
       ], 10),
+      mentionWindowBusinessDays: _int(map, [
+        'mention_window_business_days',
+        'mentionWindowBusinessDays',
+      ], 10),
     );
   }
 
@@ -231,6 +236,10 @@ class TriageConfig {
   /// has not reviewed counts as stalled.
   final int staleCoReviewerBusinessDays;
 
+  /// Business days an @-mention of one of your accounts keeps a PR in the
+  /// "Asked for Your Review" tier, if you have not reviewed since.
+  final int mentionWindowBusinessDays;
+
   /// Returns a copy with [logins] merged into [teamMembers].
   TriageConfig withTeamMembers(Iterable<String> logins) {
     final merged = {
@@ -255,6 +264,7 @@ class TriageConfig {
       searchAssignee: searchAssignee,
       crowdedReviewThreshold: crowdedReviewThreshold,
       staleCoReviewerBusinessDays: staleCoReviewerBusinessDays,
+      mentionWindowBusinessDays: mentionWindowBusinessDays,
     );
   }
 
@@ -455,6 +465,7 @@ class TriageConfig {
     'search_assignee': searchAssignee,
     'crowded_review_threshold': crowdedReviewThreshold,
     'stale_co_reviewer_business_days': staleCoReviewerBusinessDays,
+    'mention_window_business_days': mentionWindowBusinessDays,
   };
 }
 

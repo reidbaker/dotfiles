@@ -13,8 +13,7 @@ typedef CommandRunner = Future<ProcessResult> Function(
 Future<ProcessResult> defaultCommandRunner(
   String executable,
   List<String> arguments,
-) =>
-    Process.run(executable, arguments);
+) => Process.run(executable, arguments);
 
 /// Result of a PR search, including whether GitHub had more results than the
 /// configured page size allowed us to read.
@@ -30,7 +29,7 @@ class PrSearchResult {
 
 class GitHubPrFetcher {
   GitHubPrFetcher({CommandRunner? runner})
-      : _runner = runner ?? defaultCommandRunner;
+    : _runner = runner ?? defaultCommandRunner;
 
   final CommandRunner _runner;
 
@@ -73,7 +72,8 @@ class GitHubPrFetcher {
   }) async {
     if (reviewers.isEmpty) return const PrSearchResult(items: []);
     final queries = <String>[
-      for (final reviewer in reviewers) 'is:pr is:open review-requested:$reviewer',
+      for (final reviewer in reviewers)
+        'is:pr is:open review-requested:$reviewer',
       if (includeAssignee)
         for (final reviewer in reviewers) 'is:pr is:open assignee:$reviewer',
     ];
@@ -82,7 +82,6 @@ class GitHubPrFetcher {
     ]);
     return _merge(results);
   }
-
 
   /// Re-reads `mergeable` for PRs whose first read returned `UNKNOWN`.
   ///
@@ -122,14 +121,20 @@ class GitHubPrFetcher {
       final pr = batch[i];
       final parts = pr.repo.split('/');
       if (parts.length != 2) continue;
-      fields.add('p$i: repository(owner: "${parts[0]}", name: "${parts[1]}") '
-          '{ pullRequest(number: ${pr.number}) { mergeable } }');
+      fields.add(
+        'p$i: repository(owner: "${parts[0]}", name: "${parts[1]}") '
+        '{ pullRequest(number: ${pr.number}) { mergeable } }',
+      );
     }
     if (fields.isEmpty) return const {};
 
     try {
-      final res = await _runner(
-          'gh', ['api', 'graphql', '-f', 'query={${fields.join(' ')}}']);
+      final res = await _runner('gh', [
+        'api',
+        'graphql',
+        '-f',
+        'query={${fields.join(' ')}}',
+      ]);
       if (res.exitCode != 0) return const {};
       final data = jsonDecode(res.stdout.toString()) as Map<String, dynamic>;
       final payload = data['data'];
@@ -149,31 +154,32 @@ class GitHubPrFetcher {
   }
 
   static PrItem _withMergeable(PrItem item, String mergeable) => PrItem(
-        number: item.number,
-        title: item.title,
-        url: item.url,
-        repo: item.repo,
-        author: item.author,
-        isDraft: item.isDraft,
-        mergeable: mergeable,
-        reviewDecision: item.reviewDecision,
-        ciStatus: item.ciStatus,
-        totalCheckCount: item.totalCheckCount,
-        failingChecks: item.failingChecks,
-        unresolvedReviewThreads: item.unresolvedReviewThreads,
-        totalReviewThreads: item.totalReviewThreads,
-        unresolvedThreadsExact: item.unresolvedThreadsExact,
-        labels: item.labels,
-        updatedAt: item.updatedAt,
-        createdAt: item.createdAt,
-        headCommitDate: item.headCommitDate,
-        lastReviewRequestedAt: item.lastReviewRequestedAt,
-        latestReviews: item.latestReviews,
-        allReviews: item.allReviews,
-        requestedReviewers: item.requestedReviewers,
-        requestedTeams: item.requestedTeams,
-        assignedReviewers: item.assignedReviewers,
-      );
+    number: item.number,
+    title: item.title,
+    url: item.url,
+    repo: item.repo,
+    author: item.author,
+    isDraft: item.isDraft,
+    mergeable: mergeable,
+    reviewDecision: item.reviewDecision,
+    ciStatus: item.ciStatus,
+    totalCheckCount: item.totalCheckCount,
+    failingChecks: item.failingChecks,
+    unresolvedReviewThreads: item.unresolvedReviewThreads,
+    totalReviewThreads: item.totalReviewThreads,
+    unresolvedThreadsExact: item.unresolvedThreadsExact,
+    labels: item.labels,
+    updatedAt: item.updatedAt,
+    createdAt: item.createdAt,
+    headCommitDate: item.headCommitDate,
+    lastReviewRequestedAt: item.lastReviewRequestedAt,
+    latestReviews: item.latestReviews,
+    allReviews: item.allReviews,
+    requestedReviewers: item.requestedReviewers,
+    requestedTeams: item.requestedTeams,
+    assignedReviewers: item.assignedReviewers,
+    recentComments: item.recentComments,
+  );
 
   static PrSearchResult _merge(List<PrSearchResult> results) {
     final all = <PrItem>[];
@@ -219,15 +225,19 @@ class GitHubPrFetcher {
       data = jsonDecode(rawJson) as Map<String, dynamic>;
     } on FormatException catch (e) {
       throw FormatException(
-          'GitHub returned non-JSON for "$searchQuery": ${e.message}');
+        'GitHub returned non-JSON for "$searchQuery": ${e.message}',
+      );
     }
 
     // `gh` exits non-zero on GraphQL errors today, but that is undocumented
     // behaviour; checking the payload makes the contract explicit.
     if (data['errors'] case final List errors when errors.isNotEmpty) {
-      final messages =
-          errors.map((e) => (e is Map ? e['message'] : e).toString()).join('; ');
-      throw FormatException('GitHub GraphQL errors for "$searchQuery": $messages');
+      final messages = errors
+          .map((e) => (e is Map ? e['message'] : e).toString())
+          .join('; ');
+      throw FormatException(
+        'GitHub GraphQL errors for "$searchQuery": $messages',
+      );
     }
 
     final search = data['data']?['search'];
@@ -269,10 +279,16 @@ class GitHubPrFetcher {
     enriched['totalReviewThreads'] = threads.total;
     enriched['unresolvedThreadsExact'] = threads.exact;
 
-    enriched['headCommitDate'] = _firstMap(node['commits'])?['commit']
-        ?['committedDate'];
-    enriched['lastReviewRequestedAt'] =
-        _lastMap(node['timelineItems'])?['createdAt'];
+    enriched['headCommitDate'] = _firstMap(
+      node['commits'],
+    )?['commit']?['committedDate'];
+    enriched['lastReviewRequestedAt'] = _lastMap(
+      node['timelineItems'],
+    )?['createdAt'];
+
+    // `reviews` is selected for the full history; PrItem reads it as
+    // allReviews. Without this, reviews hidden from latestReviews were lost.
+    enriched['allReviews'] = node['reviews'];
 
     return enriched;
   }
@@ -328,6 +344,9 @@ class GitHubPrFetcher {
   ///   "we failed to read the rollup".
   /// - Review bodies are deliberately not selected; nothing consumes them and
   ///   they dominated the output size.
+  /// - `comments(last: 15)` bodies are selected so an explicit "@you, please
+  ///   review" is visible. Only the parsed mentions and a short excerpt are
+  ///   kept, so output size stays bounded.
   static const String _searchQueryDocument = r'''
 query($searchQuery: String!, $limit: Int!) {
   search(query: $searchQuery, type: ISSUE, first: $limit) {
@@ -350,6 +369,9 @@ query($searchQuery: String!, $limit: Int!) {
         }
         reviews(last: 30) {
           nodes { author { login } state submittedAt }
+        }
+        comments(last: 15) {
+          nodes { author { login } body createdAt }
         }
         reviewRequests(first: 20) {
           nodes {

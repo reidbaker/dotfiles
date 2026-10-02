@@ -75,6 +75,10 @@ stale_review_business_days: 3
 # were also asked to review before the PR is "Co-Reviewer Stalled".
 stale_co_reviewer_business_days: 10
 
+# Business days a human @-mention of one of your accounts in a PR comment
+# keeps the PR in "Asked for Your Review", unless you review after it.
+mention_window_business_days: 10
+
 # Distinct people (other than you) requested or reviewing at or above which a
 # review request is "crowded". Crowded team-only requests sort last.
 crowded_review_threshold: 4
