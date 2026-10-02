@@ -85,29 +85,50 @@ interleaved.
     * *Action*: `[Action: POC / Fork - Low urgency]`
 
 ### 2. Review Queue (Other People's Work)
+Terms used below:
+* **Asked by name**: one of the configured accounts is in the PR's requested
+  reviewers. GitHub's `review-requested:` search also matches requests sent to
+  a team you belong to; those are not asked by name.
+* **Team-only**: only a team was asked. You were not asked by name, are not an
+  assignee, and have never reviewed the PR.
+* **Crowded**: at least `crowded_review_threshold` distinct people other than
+  you (requested reviewers plus human reviewers; default 4).
+* **Merge conflicts** rule a PR out of tiers 2, 3 and 5; it falls to Other with
+  a "needs rebase" reason instead.
+
 1. **Re-Review Ready (Feedback Addressed)**: You reviewed before, the author
    has pushed since, and a re-review is requested.
    * *Action*: `[Action: Re-review and sign off]`
-2. **Team Review Request**: Author is a teammate, resolved from `team_orgs` or
-   listed in `team_members`.
+2. **Teammate PR Review**: Author is a teammate, resolved from `team_orgs` or
+   listed in `team_members`. CI not failing, no merge conflicts.
    * *Action*: `[Action: Review team PR]`
 3. **Clean External Contributor PR**: Non-teammate, CLA signed, not draft, no
-   blockers.
+   blockers, CI not failing, no merge conflicts.
    * *Action*: `[Action: Review external PR]`
 4. **Waiting on Author Response**: A `waiting_labels` label is applied.
    * *Action*: `[Action: Awaiting author updates]`
 5. **Draft PR in Review Queue**: Review requested on something not yet marked
-   ready.
+   ready, without merge conflicts.
    * *Action*: `[Action: Deprioritized - Awaiting author to mark ready for review]`
-6. **Blocked External PR (CLA/Blockers)**: Unsigned CLA or blocking reviews
+6. **Co-Reviewer Stalled**: You were asked by name, and another reviewer asked
+   by name has not reviewed for at least `stale_co_reviewer_business_days`
+   (default 10), counted from the most recent review request. Not draft, no
+   merge conflicts. Failing CI does not rule it out.
+   * *Action*: `[Action: Ping co-reviewer(s) or reassign]`
+7. **Blocked External PR (CLA/Blockers)**: Unsigned CLA or blocking reviews
    from the team.
    * *Action*: `[Action: Low priority (blocked)]`
-7. **Review in Repository Not In primary_orgs**
+8. **Review in Repository Not In primary_orgs**
    * *Action*: `[Action: Low urgency - add repo to primary_orgs to promote]`
-8. **Personal Fork Review**
+9. **Personal Fork Review**
    * *Action*: `[Action: Fork Review - Low urgency]`
-9. **Other / Backlog**
-   * *Action*: `[Action: Monitor]`
+10. **Other / Backlog**: Includes PRs with merge conflicts or failing CI.
+    * *Action*: `[Action: Monitor]`
+11. **Team-Only Request (not addressed to you)**: Checked before every rule
+    except repository scoping and overrides, so a team-only draft cannot rank
+    as tier 5. Uncrowded requests sort before crowded ones. The reason names
+    the teams, the head count, and any conflicts or draft state.
+    * *Action*: `[Action: Low priority - team request, not addressed to you]`
 
 ---
 

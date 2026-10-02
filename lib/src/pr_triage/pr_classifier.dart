@@ -22,11 +22,11 @@ class PrClassifier {
     required TriageConfig config,
   }) {
     final myWork = myPrs.map((pr) => classifyMyWork(pr, config)).toList()
-      ..sort(_compareTriagedItems);
+      ..sort((a, b) => _compareTriagedItems(a, b, config));
 
     final reviewQueue =
         reviewPrs.map((pr) => classifyReviewQueue(pr, config)).toList()
-          ..sort(_compareTriagedItems);
+          ..sort((a, b) => _compareTriagedItems(a, b, config));
 
     return (myWork, reviewQueue);
   }
@@ -60,29 +60,47 @@ class PrClassifier {
     final days = businessDaysWaiting(pr, config);
     final override = config.getOverrideFor(pr.repo, pr.number);
 
-    final scoped =
-        _scopeItem(pr, config, QueueType.reviewQueue, days, override);
+    final scoped = _scopeItem(
+      pr,
+      config,
+      QueueType.reviewQueue,
+      days,
+      override,
+    );
     if (scoped != null) return scoped;
+
+    final signals = _ReviewSignals.of(pr, config);
+
+    // A request that reached you only through a team is checked before the
+    // draft rule, so a team-only draft cannot outrank direct requests.
+    if (signals.isTeamOnly) {
+      return _annotate(_teamOnlyItem(pr, days, signals), override);
+    }
 
     if (pr.isDraft) {
       return _annotate(
         _buildItem(
           pr: pr,
           queue: QueueType.reviewQueue,
-          tier: ReviewQueueTier.draftReview,
-          reason: 'Author has not marked this ready for review',
+          tier: pr.isMergeBlocked
+              ? ReviewQueueTier.other
+              : ReviewQueueTier.draftReview,
+          reason: pr.isMergeBlocked
+              ? 'Draft with merge conflicts; the author needs to rebase '
+                    'before review is useful'
+              : 'Author has not marked this ready for review',
           days: days,
         ),
         override,
       );
     }
 
-    final signals = _ReviewSignals.of(pr, config);
     final candidates = <TriagedItem>[
       ?_checkReReviewReady(pr, config, days),
       ?_checkTeamReview(pr, days, signals),
       ?_checkCleanExternal(pr, days, signals),
       ?_checkWaitingOnAuthor(pr, days, signals),
+      ?_checkCoReviewerStalled(pr, config, days, signals),
       ?_checkBlockedExternal(pr, days, signals),
       _buildItem(
         pr: pr,
@@ -146,9 +164,7 @@ class PrClassifier {
     }
 
     final trigger = config.presubmitTriggerLabelFor(pr.repo);
-    if (trigger != null &&
-        !pr.hasLabel(trigger) &&
-        pr.hasNoChecksConfigured) {
+    if (trigger != null && !pr.hasLabel(trigger) && pr.hasNoChecksConfigured) {
       return _buildItem(
         pr: pr,
         queue: QueueType.myWork,
@@ -158,7 +174,6 @@ class PrClassifier {
         actionOverride: '[Action: Apply $trigger label to trigger CI]',
       );
     }
-
 
     if (pr.failingChecks.any(_isActionRequired)) {
       return _buildItem(
@@ -178,7 +193,8 @@ class PrClassifier {
   /// can carry the CI and review-thread state instead of discarding it.
   TriagedItem _draftItem(PrItem pr, TriageConfig config, int days) {
     final blockers = _activeBlockingReviews(pr);
-    final clean = pr.hasPassingCi &&
+    final clean =
+        pr.hasPassingCi &&
         !pr.isMergeBlocked &&
         blockers.isEmpty &&
         pr.unresolvedReviewThreads == 0;
@@ -216,7 +232,6 @@ class PrClassifier {
     return parts.isEmpty ? const <String>['work in progress'] : parts;
   }
 
-
   /// Tier 4.
   TriagedItem? _checkFlakyCi(PrItem pr, TriageConfig config, int days) {
     if (!pr.hasFailingCi || !_isFlakyCiFailure(pr, config)) return null;
@@ -224,7 +239,8 @@ class PrClassifier {
       pr: pr,
       queue: QueueType.myWork,
       tier: MyWorkTier.flakyCiFailure,
-      reason: 'CI failed only on known flaky checks: '
+      reason:
+          'CI failed only on known flaky checks: '
           '${pr.failingChecks.join(', ')}',
       days: days,
     );
@@ -249,7 +265,8 @@ class PrClassifier {
       pr: pr,
       queue: QueueType.myWork,
       tier: MyWorkTier.failingCiWorkRelated,
-      reason: 'CI failed on checks requiring code fixes: '
+      reason:
+          'CI failed on checks requiring code fixes: '
           '${pr.failingChecks.join(', ')}',
       days: days,
     );
@@ -283,7 +300,7 @@ class PrClassifier {
       tier: stalled ? MyWorkTier.stalledInReview : MyWorkTier.freshInReview,
       reason: stalled
           ? 'Awaiting review for $days business days '
-              '(threshold ${config.staleReviewBusinessDays})'
+                '(threshold ${config.staleReviewBusinessDays})'
           : 'Awaiting review for $days business days',
       days: days,
     );
@@ -323,12 +340,13 @@ class PrClassifier {
   /// Tier 2.
   TriagedItem? _checkTeamReview(PrItem pr, int days, _ReviewSignals s) {
     if (!s.isTeamAuthor || s.isBlocked || s.waitingOnAuthor) return null;
-    if (pr.hasFailingCi) return null;
+    if (pr.hasFailingCi || pr.isMergeBlocked) return null;
     return _buildItem(
       pr: pr,
       queue: QueueType.reviewQueue,
       tier: ReviewQueueTier.teamReviewRequest,
-      reason: 'Teammate ${pr.author} is waiting on review (CI: ${pr.ciStatus.name})',
+      reason:
+          'Teammate ${pr.author} is waiting on review (CI: ${pr.ciStatus.name})',
       days: days,
     );
   }
@@ -336,12 +354,13 @@ class PrClassifier {
   /// Tier 3.
   TriagedItem? _checkCleanExternal(PrItem pr, int days, _ReviewSignals s) {
     if (s.isTeamAuthor || s.isBlocked || s.waitingOnAuthor) return null;
-    if (pr.hasFailingCi) return null;
+    if (pr.hasFailingCi || pr.isMergeBlocked) return null;
     return _buildItem(
       pr: pr,
       queue: QueueType.reviewQueue,
       tier: ReviewQueueTier.cleanExternalPr,
-      reason: 'External contributor PR with no blockers (CI: ${pr.ciStatus.name})',
+      reason:
+          'External contributor PR with no blockers (CI: ${pr.ciStatus.name})',
       days: days,
     );
   }
@@ -362,7 +381,50 @@ class PrClassifier {
     );
   }
 
-  /// Tier 6. Emits an honest reason naming whichever condition actually
+  /// Tier 6. You were asked by name and another individually requested
+  /// reviewer has not reviewed in [TriageConfig.staleCoReviewerBusinessDays].
+  ///
+  /// Failing CI does not rule this out: a ping is useful either way. The age
+  /// is the PR's most recent review request, not each reviewer's own.
+  TriagedItem? _checkCoReviewerStalled(
+    PrItem pr,
+    TriageConfig config,
+    int days,
+    _ReviewSignals s,
+  ) {
+    if (!s.requestedDirectly || pr.isMergeBlocked) return null;
+    if (s.claMissing || s.hasWaitingLabel) return null;
+    if (s.silentCoReviewers.isEmpty) return null;
+    if (days < config.staleCoReviewerBusinessDays) return null;
+    return _buildItem(
+      pr: pr,
+      queue: QueueType.reviewQueue,
+      tier: ReviewQueueTier.coReviewerStalled,
+      reason:
+          '${s.silentCoReviewers.join(', ')} requested $days business '
+          'days ago with no review (CI: ${pr.ciStatus.name})',
+      days: days,
+    );
+  }
+
+  /// Tier 11. The request reached you only through a team.
+  TriagedItem _teamOnlyItem(PrItem pr, int days, _ReviewSignals s) {
+    final parts = <String>[
+      'Requested from ${pr.requestedTeams.join(', ')} (not you)',
+      '${s.peopleCount} people already on it${s.isCrowded ? ' (crowded)' : ''}',
+      if (pr.isMergeBlocked) 'merge conflicts',
+      if (pr.isDraft) 'draft',
+    ];
+    return _buildItem(
+      pr: pr,
+      queue: QueueType.reviewQueue,
+      tier: ReviewQueueTier.teamOnlyRequest,
+      reason: parts.join('; '),
+      days: days,
+    );
+  }
+
+  /// Tier 7. Emits an honest reason naming whichever condition actually
   /// matched, instead of always claiming a CLA problem.
   TriagedItem? _checkBlockedExternal(PrItem pr, int days, _ReviewSignals s) {
     if (!s.isBlocked) return null;
@@ -480,8 +542,8 @@ class PrClassifier {
 
   static TriageTier _nonPrimaryTier(QueueType queue) =>
       queue == QueueType.myWork
-          ? MyWorkTier.nonPrimaryRepo
-          : ReviewQueueTier.nonPrimaryRepoReview;
+      ? MyWorkTier.nonPrimaryRepo
+      : ReviewQueueTier.nonPrimaryRepoReview;
 
   /// Human `CHANGES_REQUESTED` reviews that the author has not yet responded
   /// to with new commits. Bot verdicts and reviews predating the head commit
@@ -496,8 +558,9 @@ class PrClassifier {
 
   bool _isFlakyCiFailure(PrItem pr, TriageConfig config) {
     if (pr.failingChecks.isEmpty) return false;
-    final keywords =
-        config.flakyTestKeywords.map((k) => k.toLowerCase()).toList();
+    final keywords = config.flakyTestKeywords
+        .map((k) => k.toLowerCase())
+        .toList();
     return pr.failingChecks.every((check) {
       final lower = check.toLowerCase();
       return keywords.any(lower.contains);
@@ -506,7 +569,8 @@ class PrClassifier {
 
   static bool _isActionRequired(String check) {
     final lower = check.toLowerCase();
-    return lower.contains('action_required') || lower.contains('action required');
+    return lower.contains('action_required') ||
+        lower.contains('action required');
   }
 
   TriagedItem _lowestRank(List<TriagedItem> candidates) =>
@@ -532,8 +596,13 @@ class PrClassifier {
     );
   }
 
-  int _compareTriagedItems(TriagedItem a, TriagedItem b) {
+  int _compareTriagedItems(TriagedItem a, TriagedItem b, TriageConfig config) {
     if (a.tierRank != b.tierRank) return a.tierRank.compareTo(b.tierRank);
+    if (a.tier == ReviewQueueTier.teamOnlyRequest) {
+      final aCrowded = _ReviewSignals.of(a.pr, config).isCrowded;
+      final bCrowded = _ReviewSignals.of(b.pr, config).isCrowded;
+      if (aCrowded != bCrowded) return aCrowded ? 1 : -1;
+    }
     if (a.businessDaysElapsed != b.businessDaysElapsed) {
       return b.businessDaysElapsed.compareTo(a.businessDaysElapsed);
     }
@@ -566,9 +635,7 @@ class PrClassifier {
     final finish = to.toLocal();
     if (finish.isBefore(start)) return 0;
 
-    final skip = {
-      for (final h in holidays) DateTime(h.year, h.month, h.day),
-    };
+    final skip = {for (final h in holidays) DateTime(h.year, h.month, h.day)};
 
     var cur = DateTime(start.year, start.month, start.day);
     final end = DateTime(finish.year, finish.month, finish.day);
@@ -594,10 +661,25 @@ class _ReviewSignals {
     required this.claMissing,
     required this.hasWaitingLabel,
     required this.blockers,
+    required this.requestedDirectly,
+    required this.isTeamOnly,
+    required this.peopleCount,
+    required this.isCrowded,
+    required this.silentCoReviewers,
   });
 
   factory _ReviewSignals.of(PrItem pr, TriageConfig config) {
     final head = pr.headCommitDate;
+    final requestedDirectly = pr.requestedReviewers.any(config.isMyAccount);
+    final assigned = pr.assignedReviewers.any(config.isMyAccount);
+    final reviewedBefore = pr.latestReviewBy(config.isMyAccount) != null;
+    final people = <String>{
+      for (final login in pr.requestedReviewers)
+        if (!config.isMyAccount(login) && !_isBotLogin(login))
+          login.toLowerCase(),
+      for (final r in pr.humanReviews)
+        if (!config.isMyAccount(r.author)) r.author.toLowerCase(),
+    };
     return _ReviewSignals(
       isTeamAuthor: config.isTeamMember(pr.author),
       claMissing: pr.hasAnyLabel(config.claMissingLabels),
@@ -606,7 +688,26 @@ class _ReviewSignals {
           .where((r) => r.isChangesRequested)
           .where((r) => head == null || r.submittedAt.isAfter(head))
           .toList(),
+      requestedDirectly: requestedDirectly,
+      isTeamOnly:
+          pr.requestedTeams.isNotEmpty &&
+          !requestedDirectly &&
+          !assigned &&
+          !reviewedBefore,
+      peopleCount: people.length,
+      isCrowded: people.length >= config.crowdedReviewThreshold,
+      // GitHub removes a reviewer from requestedReviewers once they review,
+      // so everyone still listed has not reviewed since being asked.
+      silentCoReviewers: [
+        for (final login in pr.requestedReviewers)
+          if (!config.isMyAccount(login) && !_isBotLogin(login)) login,
+      ],
     );
+  }
+
+  static bool _isBotLogin(String login) {
+    final lower = login.toLowerCase();
+    return lower.endsWith('[bot]') || kBotReviewerLogins.contains(lower);
   }
 
   final bool isTeamAuthor;
@@ -614,10 +715,28 @@ class _ReviewSignals {
   final bool hasWaitingLabel;
   final List<PrReview> blockers;
 
+  /// One of your accounts is in `requestedReviewers` (asked by name).
+  final bool requestedDirectly;
+
+  /// Only a team was asked: you were not asked by name, are not assigned,
+  /// and have never reviewed the PR.
+  final bool isTeamOnly;
+
+  /// Distinct people other than you who are requested or have reviewed.
+  final int peopleCount;
+  final bool isCrowded;
+
+  /// Other individually requested reviewers who have not reviewed.
+  final List<String> silentCoReviewers;
+
   bool get isBlocked => claMissing || (blockers.isNotEmpty && !isTeamAuthor);
   bool get waitingOnAuthor => hasWaitingLabel || claMissing;
 
   String backlogReason(PrItem pr) {
+    if (pr.isMergeBlocked) {
+      return 'Merge conflicts; the author needs to rebase before review is '
+          'useful';
+    }
     if (pr.hasFailingCi) {
       return 'CI is failing; likely to change before review is useful';
     }

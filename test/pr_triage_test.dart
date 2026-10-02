@@ -40,6 +40,8 @@ PrItem pr({
   List<PrReview> latestReviews = const [],
   List<PrReview> allReviews = const [],
   List<String> requestedReviewers = const [],
+  List<String> requestedTeams = const [],
+  List<String> assignedReviewers = const [],
 }) {
   final created = createdAt ?? kNow.subtract(const Duration(days: 1));
   return PrItem(
@@ -64,6 +66,8 @@ PrItem pr({
     latestReviews: latestReviews,
     allReviews: allReviews,
     requestedReviewers: requestedReviewers,
+    requestedTeams: requestedTeams,
+    assignedReviewers: assignedReviewers,
   );
 }
 
@@ -117,19 +121,22 @@ cla_missing_labels:
     });
 
     test('clamps query_limit to GitHub\'s search page cap', () {
-      final config =
-          TriageConfig.fromYamlString('accounts: [me]\nquery_limit: 500');
+      final config = TriageConfig.fromYamlString(
+        'accounts: [me]\nquery_limit: 500',
+      );
       expect(config.queryLimit, kMaxSearchPageSize);
     });
 
     test('parses holidays and rejects malformed dates', () {
       final config = TriageConfig.fromYamlString(
-          'accounts: [me]\nholidays: ["2026-01-07"]');
+        'accounts: [me]\nholidays: ["2026-01-07"]',
+      );
       expect(config.holidays.single, DateTime(2026, 1, 7));
 
       expect(
         () => TriageConfig.fromYamlString(
-            'accounts: [me]\nholidays: ["next tuesday"]'),
+          'accounts: [me]\nholidays: ["next tuesday"]',
+        ),
         throwsA(isA<FormatException>()),
       );
     });
@@ -137,6 +144,21 @@ cla_missing_labels:
     test('CLA labels are no longer duplicated into waiting labels', () {
       expect(kDefaultWaitingLabels, isNot(contains('cla: no')));
       expect(kDefaultClaMissingLabels, contains('cla: no'));
+    });
+
+    test('reads the review-queue thresholds, with defaults', () {
+      final defaults = TriageConfig.fromYamlString('accounts: [me]');
+      expect(defaults.crowdedReviewThreshold, 4);
+      expect(defaults.staleCoReviewerBusinessDays, 10);
+
+      final custom = TriageConfig.fromYamlString(
+        'accounts: [me]\n'
+        'crowded_review_threshold: 6\n'
+        'stale_co_reviewer_business_days: 7',
+      );
+      expect(custom.crowdedReviewThreshold, 6);
+      expect(custom.staleCoReviewerBusinessDays, 7);
+      expect(custom.withTeamMembers(['x']).staleCoReviewerBusinessDays, 7);
     });
   });
 
@@ -207,8 +229,10 @@ cla_missing_labels:
     test('counts weekdays between two dates', () {
       // Mon 2026-01-05 to Fri 2026-01-09.
       expect(
-        classifier()
-            .calculateBusinessDays(DateTime(2026, 1, 5), DateTime(2026, 1, 9)),
+        classifier().calculateBusinessDays(
+          DateTime(2026, 1, 5),
+          DateTime(2026, 1, 9),
+        ),
         4,
       );
     });
@@ -216,8 +240,10 @@ cla_missing_labels:
     test('skips weekends', () {
       // Fri to Mon is one business day, not three.
       expect(
-        classifier()
-            .calculateBusinessDays(DateTime(2026, 1, 9), DateTime(2026, 1, 12)),
+        classifier().calculateBusinessDays(
+          DateTime(2026, 1, 9),
+          DateTime(2026, 1, 12),
+        ),
         1,
       );
     });
@@ -455,8 +481,11 @@ cla_missing_labels:
           totalCheckCount: 4,
           headCommitDate: kNow.subtract(const Duration(days: 3)),
           latestReviews: [
-            review('cbracken', 'CHANGES_REQUESTED',
-                kNow.subtract(const Duration(days: 1))),
+            review(
+              'cbracken',
+              'CHANGES_REQUESTED',
+              kNow.subtract(const Duration(days: 1)),
+            ),
           ],
         ),
         kConfig,
@@ -474,8 +503,11 @@ cla_missing_labels:
           totalCheckCount: 4,
           headCommitDate: kNow.subtract(const Duration(days: 3)),
           latestReviews: [
-            review('gemini-code-assist', 'CHANGES_REQUESTED',
-                kNow.subtract(const Duration(days: 1))),
+            review(
+              'gemini-code-assist',
+              'CHANGES_REQUESTED',
+              kNow.subtract(const Duration(days: 1)),
+            ),
           ],
         ),
         kConfig,
@@ -490,8 +522,11 @@ cla_missing_labels:
           totalCheckCount: 4,
           headCommitDate: kNow.subtract(const Duration(days: 1)),
           latestReviews: [
-            review('cbracken', 'CHANGES_REQUESTED',
-                kNow.subtract(const Duration(days: 5))),
+            review(
+              'cbracken',
+              'CHANGES_REQUESTED',
+              kNow.subtract(const Duration(days: 5)),
+            ),
           ],
         ),
         kConfig,
@@ -533,8 +568,10 @@ cla_missing_labels:
     });
 
     test('a repo owned by one of my accounts is a fork', () {
-      final item =
-          classifier().classifyMyWork(pr(repo: 'reidbaker/dotfiles'), kConfig);
+      final item = classifier().classifyMyWork(
+        pr(repo: 'reidbaker/dotfiles'),
+        kConfig,
+      );
       expect(item.tier, MyWorkTier.forkOrPoc);
     });
   });
@@ -552,8 +589,7 @@ cla_missing_labels:
     );
 
     test('demote buries the PR and keeps the custom action', () {
-      final item =
-          classifier().classifyMyWork(pr(number: 189918), demoted);
+      final item = classifier().classifyMyWork(pr(number: 189918), demoted);
       expect(item.tier, MyWorkTier.forkOrPoc);
       expect(item.actionPrompt, contains('DSL migration'));
       expect(item.reason, contains('Exploratory POC.'));
@@ -562,7 +598,9 @@ cla_missing_labels:
     test('a note-only override annotates without demoting', () {
       const annotated = TriageConfig(
         accounts: ['reidbaker'],
-        prOverrides: {'flutter/flutter#7': PrOverride(note: 'blocked on infra')},
+        prOverrides: {
+          'flutter/flutter#7': PrOverride(note: 'blocked on infra'),
+        },
       );
       final item = classifier().classifyMyWork(
         pr(
@@ -595,8 +633,11 @@ cla_missing_labels:
         pr(
           author: 'gmackall',
           allReviews: [
-            review('reidbaker', 'APPROVED',
-                kNow.subtract(const Duration(days: 5))),
+            review(
+              'reidbaker',
+              'APPROVED',
+              kNow.subtract(const Duration(days: 5)),
+            ),
           ],
           headCommitDate: kNow.subtract(const Duration(days: 1)),
         ),
@@ -612,8 +653,11 @@ cla_missing_labels:
         pr(
           author: 'gmackall',
           allReviews: [
-            review('reidbaker', 'CHANGES_REQUESTED',
-                kNow.subtract(const Duration(days: 5))),
+            review(
+              'reidbaker',
+              'CHANGES_REQUESTED',
+              kNow.subtract(const Duration(days: 5)),
+            ),
           ],
           requestedReviewers: ['reidbaker'],
         ),
@@ -667,8 +711,11 @@ cla_missing_labels:
           author: 'stranger',
           headCommitDate: kNow.subtract(const Duration(days: 3)),
           latestReviews: [
-            review('cbracken', 'CHANGES_REQUESTED',
-                kNow.subtract(const Duration(days: 1))),
+            review(
+              'cbracken',
+              'CHANGES_REQUESTED',
+              kNow.subtract(const Duration(days: 1)),
+            ),
           ],
         ),
         kConfig,
@@ -697,6 +744,219 @@ cla_missing_labels:
             .tier,
         ReviewQueueTier.forkOrPocReview,
       );
+    });
+  });
+
+  group('Review Queue: team-only requests', () {
+    test('a team-only draft goes to the bottom, not the draft tier', () {
+      // The shape of flutter/flutter#178551: teams and other people asked,
+      // not you; draft; conflicting.
+      final item = classifier().classifyReviewQueue(
+        pr(
+          author: 'stranger',
+          isDraft: true,
+          mergeable: 'CONFLICTING',
+          requestedTeams: ['ios-reviewers', 'android-reviewers'],
+          requestedReviewers: ['justinmc', 'jtmcdole', 'loic-sharma'],
+          latestReviews: [
+            review(
+              'Renzo-Olivares',
+              'COMMENTED',
+              kNow.subtract(const Duration(days: 30)),
+            ),
+          ],
+        ),
+        kConfig,
+      );
+      expect(item.tier, ReviewQueueTier.teamOnlyRequest);
+      expect(item.reason, contains('ios-reviewers, android-reviewers'));
+      expect(item.reason, contains('4 people already on it (crowded)'));
+      expect(item.reason, contains('merge conflicts'));
+      expect(item.reason, contains('draft'));
+    });
+
+    test('a request to you and a team is not team-only', () {
+      final item = classifier().classifyReviewQueue(
+        pr(
+          author: 'gmackall',
+          ciStatus: CiStatus.passing,
+          totalCheckCount: 3,
+          requestedTeams: ['android-reviewers'],
+          requestedReviewers: ['reidbaker'],
+        ),
+        kConfig,
+      );
+      expect(item.tier, ReviewQueueTier.teamReviewRequest);
+    });
+
+    test('an assignment is not team-only', () {
+      final item = classifier().classifyReviewQueue(
+        pr(
+          author: 'gmackall',
+          ciStatus: CiStatus.passing,
+          totalCheckCount: 3,
+          requestedTeams: ['android-reviewers'],
+          assignedReviewers: ['reidbaker-agent'],
+        ),
+        kConfig,
+      );
+      expect(item.tier, ReviewQueueTier.teamReviewRequest);
+    });
+
+    test(
+      'a push after my review stays re-review ready under a team request',
+      () {
+        final item = classifier().classifyReviewQueue(
+          pr(
+            author: 'gmackall',
+            requestedTeams: ['android-reviewers'],
+            allReviews: [
+              review(
+                'reidbaker',
+                'COMMENTED',
+                kNow.subtract(const Duration(days: 5)),
+              ),
+            ],
+            headCommitDate: kNow.subtract(const Duration(days: 1)),
+          ),
+          kConfig,
+        );
+        expect(item.tier, ReviewQueueTier.reReviewReady);
+      },
+    );
+
+    test('team-only ranks below the backlog tier', () {
+      expect(
+        ReviewQueueTier.teamOnlyRequest.rank,
+        greaterThan(ReviewQueueTier.other.rank),
+      );
+    });
+
+    test('crowded team-only requests sort after uncrowded ones', () {
+      final crowded = pr(
+        number: 1,
+        author: 'stranger',
+        requestedTeams: ['android-reviewers'],
+        requestedReviewers: ['a1', 'a2', 'a3', 'a4'],
+        lastReviewRequestedAt: kNow.subtract(const Duration(days: 40)),
+      );
+      final small = pr(
+        number: 2,
+        author: 'stranger',
+        requestedTeams: ['android-reviewers'],
+        requestedReviewers: ['a1'],
+        lastReviewRequestedAt: kNow.subtract(const Duration(days: 2)),
+      );
+      final (_, queue) = classifier().classifyAll(
+        myPrs: const [],
+        reviewPrs: [crowded, small],
+        config: kConfig,
+      );
+      expect(queue.map((i) => i.pr.number), [2, 1]);
+    });
+  });
+
+  group('Review Queue: merge conflicts', () {
+    test('a conflicting teammate PR falls to the backlog with the reason', () {
+      final item = classifier().classifyReviewQueue(
+        pr(
+          author: 'gmackall',
+          mergeable: 'CONFLICTING',
+          ciStatus: CiStatus.passing,
+          totalCheckCount: 3,
+          requestedReviewers: ['reidbaker'],
+        ),
+        kConfig,
+      );
+      expect(item.tier, ReviewQueueTier.other);
+      expect(item.reason, contains('Merge conflicts'));
+    });
+
+    test('a conflicting draft asked of you falls to the backlog', () {
+      final item = classifier().classifyReviewQueue(
+        pr(
+          author: 'stranger',
+          isDraft: true,
+          mergeable: 'CONFLICTING',
+          requestedReviewers: ['reidbaker'],
+        ),
+        kConfig,
+      );
+      expect(item.tier, ReviewQueueTier.other);
+      expect(item.reason, contains('merge conflicts'));
+    });
+  });
+
+  group('Review Queue: co-reviewer stalled', () {
+    // kNow is Thursday 2026-01-15; 2026-01-01 is 10 business days earlier
+    // and 2026-01-02 is 9.
+    PrItem stalledShape(
+      DateTime requestedAt, {
+      String mergeable = 'MERGEABLE',
+    }) => pr(
+      author: 'stranger',
+      mergeable: mergeable,
+      ciStatus: CiStatus.failing,
+      totalCheckCount: 3,
+      requestedReviewers: ['reidbaker', 'jesswrd'],
+      lastReviewRequestedAt: requestedAt,
+    );
+
+    test('fires at the threshold and names the co-reviewer', () {
+      final item = classifier().classifyReviewQueue(
+        stalledShape(DateTime(2026, 1, 1, 10)),
+        kConfig,
+      );
+      expect(item.tier, ReviewQueueTier.coReviewerStalled);
+      expect(item.reason, contains('jesswrd'));
+      expect(item.businessDaysElapsed, 10);
+    });
+
+    test('does not fire one day before the threshold', () {
+      final item = classifier().classifyReviewQueue(
+        stalledShape(DateTime(2026, 1, 2, 10)),
+        kConfig,
+      );
+      expect(item.tier, ReviewQueueTier.other);
+    });
+
+    test('does not fire when the PR has merge conflicts', () {
+      final item = classifier().classifyReviewQueue(
+        stalledShape(DateTime(2026, 1, 1, 10), mergeable: 'CONFLICTING'),
+        kConfig,
+      );
+      expect(item.tier, ReviewQueueTier.other);
+    });
+
+    test('ignores bot reviewers', () {
+      final item = classifier().classifyReviewQueue(
+        pr(
+          author: 'stranger',
+          ciStatus: CiStatus.failing,
+          totalCheckCount: 3,
+          requestedReviewers: [
+            'reidbaker',
+            'copilot-pull-request-reviewer[bot]',
+          ],
+          lastReviewRequestedAt: DateTime(2026, 1, 1, 10),
+        ),
+        kConfig,
+      );
+      expect(item.tier, ReviewQueueTier.other);
+    });
+
+    test('a passing teammate PR stays in the teammate tier', () {
+      final item = classifier().classifyReviewQueue(
+        pr(
+          author: 'gmackall',
+          ciStatus: CiStatus.passing,
+          totalCheckCount: 3,
+          requestedReviewers: ['reidbaker', 'jesswrd'],
+          lastReviewRequestedAt: DateTime(2026, 1, 1, 10),
+        ),
+        kConfig,
+      );
+      expect(item.tier, ReviewQueueTier.teamReviewRequest);
     });
   });
 
@@ -755,12 +1015,14 @@ cla_missing_labels:
       expect(result.reviewQueue.map((i) => i.pr.number), [2]);
     });
 
-    test('reports truncation so a partial queue is not read as complete',
-        () async {
-      final result = await run(authored: [pr()], truncated: true);
-      expect(result.truncated, isTrue);
-      expect(result.toJson()['truncated'], isTrue);
-    });
+    test(
+      'reports truncation so a partial queue is not read as complete',
+      () async {
+        final result = await run(authored: [pr()], truncated: true);
+        expect(result.truncated, isTrue);
+        expect(result.toJson()['truncated'], isTrue);
+      },
+    );
 
     test('surfaces config warnings', () async {
       final result = await run(configPath: '/missing.yaml');
@@ -768,23 +1030,30 @@ cla_missing_labels:
     });
 
     test('warns when org membership cannot be resolved', () async {
-      fs.file('/config.yaml').writeAsStringSync(
-          'accounts:\n  - reidbaker\nteam_orgs:\n  - flutter\n');
+      fs
+          .file('/config.yaml')
+          .writeAsStringSync(
+            'accounts:\n  - reidbaker\nteam_orgs:\n  - flutter\n',
+          );
       final result = await run();
-      expect(
-        result.warnings.any((w) => w.contains('read:org')),
-        isTrue,
-      );
+      expect(result.warnings.any((w) => w.contains('read:org')), isTrue);
     });
 
     test('promotes teammates once org membership resolves', () async {
-      fs.file('/config.yaml').writeAsStringSync(
-          'accounts:\n  - reidbaker\nteam_orgs:\n  - flutter\n');
+      fs
+          .file('/config.yaml')
+          .writeAsStringSync(
+            'accounts:\n  - reidbaker\nteam_orgs:\n  - flutter\n',
+          );
       final result = await TriageEngine(
         fs: fs,
         fetcher: _FakeFetcher(
           reviews: [
-            pr(author: 'gmackall', ciStatus: CiStatus.passing, totalCheckCount: 3),
+            pr(
+              author: 'gmackall',
+              ciStatus: CiStatus.passing,
+              totalCheckCount: 3,
+            ),
           ],
         ),
         classifier: classifier(),
@@ -823,15 +1092,16 @@ cla_missing_labels:
       // Search qualifiers are ANDed with no grouping syntax, so
       // "author:a author:b" is an intersection and matches nothing.
       final runner = _RecordingRunner();
-      await GitHubPrFetcher(runner: runner.call).fetchAuthored(
-        authors: ['reidbaker', 'reidbaker-agent'],
-        limit: 10,
-      );
+      await GitHubPrFetcher(runner: runner.call)
+          .fetchAuthored(authors: ['reidbaker', 'reidbaker-agent'], limit: 10);
       final queries = runner.queries;
       expect(queries, hasLength(2));
       expect(queries[0], endsWith('author:reidbaker'));
       expect(queries[1], endsWith('author:reidbaker-agent'));
-      expect(queries.any((q) => q.contains('author:reidbaker author:')), isFalse);
+      expect(
+        queries.any((q) => q.contains('author:reidbaker author:')),
+        isFalse,
+      );
     });
 
     test('clamps the page size to GitHub\'s cap', () async {
@@ -842,27 +1112,32 @@ cla_missing_labels:
       expect(runner.lastArgs, contains('limit=$kMaxSearchPageSize'));
     });
 
-    test('surfaces GraphQL errors instead of returning an empty queue',
-        () async {
-      final runner = _RecordingRunner(
-        response: '{"errors":[{"message":"Bad credentials"}]}',
-      );
-      expect(
-        () => GitHubPrFetcher(runner: runner.call)
-            .fetchAuthored(authors: ['reidbaker'], limit: 10),
-        throwsA(isA<Exception>()),
-      );
-    });
+    test(
+      'surfaces GraphQL errors instead of returning an empty queue',
+      () async {
+        final runner = _RecordingRunner(
+          response: '{"errors":[{"message":"Bad credentials"}]}',
+        );
+        expect(
+          () =>
+              GitHubPrFetcher(runner: runner.call)
+                  .fetchAuthored(authors: ['reidbaker'], limit: 10),
+          throwsA(isA<Exception>()),
+        );
+      },
+    );
 
-    test('reports truncation when GitHub has more matches than requested',
-        () async {
-      final runner = _RecordingRunner(
-        response: '{"data":{"search":{"issueCount":137,"nodes":[]}}}',
-      );
-      final result = await GitHubPrFetcher(runner: runner.call)
-          .fetchAuthored(authors: ['reidbaker'], limit: 10);
-      expect(result.truncated, isTrue);
-    });
+    test(
+      'reports truncation when GitHub has more matches than requested',
+      () async {
+        final runner = _RecordingRunner(
+          response: '{"data":{"search":{"issueCount":137,"nodes":[]}}}',
+        );
+        final result = await GitHubPrFetcher(runner: runner.call)
+            .fetchAuthored(authors: ['reidbaker'], limit: 10);
+        expect(result.truncated, isTrue);
+      },
+    );
 
     test('includes assignee only when asked', () async {
       final plain = _RecordingRunner();
@@ -903,23 +1178,20 @@ class _FakeFetcher extends GitHubPrFetcher {
   Future<PrSearchResult> fetchAuthored({
     required List<String> authors,
     int limit = 50,
-  }) async =>
-      PrSearchResult(items: authored, truncated: truncated);
+  }) async => PrSearchResult(items: authored, truncated: truncated);
 
   @override
   Future<PrSearchResult> fetchReviewQueue({
     required List<String> reviewers,
     int limit = 50,
     bool includeAssignee = false,
-  }) async =>
-      PrSearchResult(items: reviews);
+  }) async => PrSearchResult(items: reviews);
 
   @override
   Future<List<PrItem>> refreshUnknownMergeable(
     List<PrItem> items, {
     Duration delay = Duration.zero,
-  }) async =>
-      items;
+  }) async => items;
 }
 
 /// Fails the test rather than shelling out if a stub misses an override.
@@ -930,7 +1202,7 @@ Future<ProcessResult> _unreachableRunner(String _, List<String> args) async {
 /// Team resolver stub; an empty set stands in for a token without read:org.
 class _FakeResolver extends TeamResolver {
   _FakeResolver(FileSystem fs, this.members)
-      : super(fs: fs, runner: _unreachableRunner);
+    : super(fs: fs, runner: _unreachableRunner);
 
   final Set<String> members;
 
@@ -938,8 +1210,7 @@ class _FakeResolver extends TeamResolver {
   Future<Set<String>> resolveMembers(
     List<String> orgs, {
     String? cachePath,
-  }) async =>
-      members;
+  }) async => members;
 }
 
 /// Captures the arguments passed to `gh` so query construction can be asserted
@@ -954,12 +1225,12 @@ class _RecordingRunner {
 
   /// Every `searchQuery=` payload seen, in call order.
   List<String> get queries => [
-        for (final args in calls)
-          args.firstWhere(
-            (a) => a.startsWith('searchQuery='),
-            orElse: () => args.join(' '),
-          ),
-      ];
+    for (final args in calls)
+      args.firstWhere(
+        (a) => a.startsWith('searchQuery='),
+        orElse: () => args.join(' '),
+      ),
+  ];
 
   Future<ProcessResult> call(String executable, List<String> args) async {
     calls.add(args);

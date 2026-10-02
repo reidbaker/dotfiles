@@ -54,12 +54,7 @@ const int kMaxSearchPageSize = 100;
 
 /// A per-PR annotation that adjusts how a specific pull request is triaged.
 class PrOverride {
-  const PrOverride({
-    this.demote = false,
-    this.tier,
-    this.action,
-    this.note,
-  });
+  const PrOverride({this.demote = false, this.tier, this.action, this.note});
 
   /// Parses an override entry.
   ///
@@ -74,7 +69,8 @@ class PrOverride {
       final demote = value['demote'];
       if (demote != null && demote is! bool) {
         throw FormatException(
-            'pr_overrides: "demote" must be true or false, got "$demote".');
+          'pr_overrides: "demote" must be true or false, got "$demote".',
+        );
       }
       return PrOverride(
         demote: (demote as bool?) ?? false,
@@ -103,11 +99,11 @@ class PrOverride {
   bool get changesPlacement => demote || tier != null;
 
   Map<String, dynamic> toJson() => {
-        'demote': demote,
-        if (tier != null) 'tier': tier,
-        if (action != null) 'action': action,
-        if (note != null) 'note': note,
-      };
+    'demote': demote,
+    if (tier != null) 'tier': tier,
+    if (action != null) 'action': action,
+    if (note != null) 'note': note,
+  };
 }
 
 /// Configuration for the PR triage skill.
@@ -128,6 +124,8 @@ class TriageConfig {
     this.prOverrides = const {},
     this.queryLimit = 50,
     this.searchAssignee = false,
+    this.crowdedReviewThreshold = 4,
+    this.staleCoReviewerBusinessDays = 10,
   });
 
   /// Factory that builds a default config around the current GitHub user.
@@ -148,10 +146,15 @@ class TriageConfig {
   factory TriageConfig.fromYamlMap(YamlMap map) {
     final accounts = _stringList(map, ['accounts']);
     final primaryOrgs = _stringList(map, ['primary_orgs', 'primaryOrgs']);
-    final flaky =
-        _stringList(map, ['flaky_test_keywords', 'flakyTestKeywords']);
-    final blocked = _stringList(
-        map, ['cicd_blocked_labels', 'cicdBlockedLabels', 'cicd_action_labels']);
+    final flaky = _stringList(map, [
+      'flaky_test_keywords',
+      'flakyTestKeywords',
+    ]);
+    final blocked = _stringList(map, [
+      'cicd_blocked_labels',
+      'cicdBlockedLabels',
+      'cicd_action_labels',
+    ]);
     final waiting = _stringList(map, ['waiting_labels', 'waitingLabels']);
     final cla = _stringList(map, ['cla_missing_labels', 'claMissingLabels']);
     final limit = _int(map, ['query_limit', 'queryLimit'], 50);
@@ -160,22 +163,31 @@ class TriageConfig {
       accounts: accounts,
       teamMembers: _stringList(map, ['team_members', 'teamMembers']),
       teamOrgs: _stringList(map, ['team_orgs', 'teamOrgs']),
-      primaryOrgs:
-          primaryOrgs.isEmpty ? const ['flutter', 'dart-lang'] : primaryOrgs,
+      primaryOrgs: primaryOrgs.isEmpty
+          ? const ['flutter', 'dart-lang']
+          : primaryOrgs,
       primaryRepos: _stringList(map, ['primary_repos', 'primaryRepos']),
-      staleReviewBusinessDays: _int(
-          map, ['stale_review_business_days', 'staleReviewBusinessDays'], 3),
+      staleReviewBusinessDays: _int(map, [
+        'stale_review_business_days',
+        'staleReviewBusinessDays',
+      ], 3),
       flakyTestKeywords: flaky.isEmpty ? kDefaultFlakyKeywords : flaky,
       cicdBlockedLabels: blocked.isEmpty ? kDefaultCicdBlockedLabels : blocked,
       presubmitTriggers: _extractPresubmitTriggers(map),
       waitingLabels: waiting.isEmpty ? kDefaultWaitingLabels : waiting,
       claMissingLabels: cla.isEmpty ? kDefaultClaMissingLabels : cla,
       holidays: _extractHolidays(map),
-      prOverrides:
-          _extractOverrides(map['pr_overrides'] ?? map['prOverrides']),
+      prOverrides: _extractOverrides(map['pr_overrides'] ?? map['prOverrides']),
       queryLimit: limit.clamp(1, kMaxSearchPageSize),
-      searchAssignee:
-          _bool(map, ['search_assignee', 'searchAssignee'], false),
+      searchAssignee: _bool(map, ['search_assignee', 'searchAssignee'], false),
+      crowdedReviewThreshold: _int(map, [
+        'crowded_review_threshold',
+        'crowdedReviewThreshold',
+      ], 4),
+      staleCoReviewerBusinessDays: _int(map, [
+        'stale_co_reviewer_business_days',
+        'staleCoReviewerBusinessDays',
+      ], 10),
     );
   }
 
@@ -210,13 +222,21 @@ class TriageConfig {
   /// Off by default because it doubles query count for typically zero results.
   final bool searchAssignee;
 
+  /// Distinct people (requested reviewers plus human reviewers) at or above
+  /// which a review request counts as crowded. Crowded team-only requests
+  /// sort last.
+  final int crowdedReviewThreshold;
+
+  /// Business days after which another individually requested reviewer who
+  /// has not reviewed counts as stalled.
+  final int staleCoReviewerBusinessDays;
+
   /// Returns a copy with [logins] merged into [teamMembers].
   TriageConfig withTeamMembers(Iterable<String> logins) {
     final merged = {
       ...teamMembers.map((m) => m.toLowerCase()),
       ...logins.map((m) => m.toLowerCase()),
-    }.toList()
-      ..sort();
+    }.toList()..sort();
     return TriageConfig(
       accounts: accounts,
       teamMembers: merged,
@@ -233,6 +253,8 @@ class TriageConfig {
       prOverrides: prOverrides,
       queryLimit: queryLimit,
       searchAssignee: searchAssignee,
+      crowdedReviewThreshold: crowdedReviewThreshold,
+      staleCoReviewerBusinessDays: staleCoReviewerBusinessDays,
     );
   }
 
@@ -350,7 +372,8 @@ class TriageConfig {
     if (value == null) return fallback;
     if (value is int) return value;
     throw FormatException(
-        '${keys.first}: expected an integer, got "$value" (${value.runtimeType}).');
+      '${keys.first}: expected an integer, got "$value" (${value.runtimeType}).',
+    );
   }
 
   static bool _bool(YamlMap map, List<String> keys, bool fallback) {
@@ -358,12 +381,13 @@ class TriageConfig {
     if (value == null) return fallback;
     if (value is bool) return value;
     throw FormatException(
-        '${keys.first}: expected true or false, got "$value".');
+      '${keys.first}: expected true or false, got "$value".',
+    );
   }
 
   static Map<String, String> _extractPresubmitTriggers(YamlMap map) {
-    final scalar = map['presubmit_trigger_label'] ??
-        map['presubmitTriggerLabel'];
+    final scalar =
+        map['presubmit_trigger_label'] ?? map['presubmitTriggerLabel'];
     final mapping = map['presubmit_triggers'] ?? map['presubmitTriggers'];
 
     if (mapping is Map) {
@@ -393,7 +417,8 @@ class TriageConfig {
       final parsed = DateTime.tryParse(entry);
       if (parsed == null) {
         throw FormatException(
-            'holidays: "$entry" is not a valid YYYY-MM-DD date.');
+          'holidays: "$entry" is not a valid YYYY-MM-DD date.',
+        );
       }
       result.add(DateTime(parsed.year, parsed.month, parsed.day));
     }
@@ -413,22 +438,24 @@ class TriageConfig {
   }
 
   Map<String, dynamic> toJson() => {
-        'accounts': accounts,
-        'team_members': teamMembers,
-        'team_orgs': teamOrgs,
-        'primary_orgs': primaryOrgs,
-        'primary_repos': primaryRepos,
-        'stale_review_business_days': staleReviewBusinessDays,
-        'flaky_test_keywords': flakyTestKeywords,
-        'cicd_blocked_labels': cicdBlockedLabels,
-        'presubmit_triggers': presubmitTriggers,
-        'waiting_labels': waitingLabels,
-        'cla_missing_labels': claMissingLabels,
-        'holidays': holidays.map((d) => d.toIso8601String()).toList(),
-        'pr_overrides': prOverrides.map((k, v) => MapEntry(k, v.toJson())),
-        'query_limit': queryLimit,
-        'search_assignee': searchAssignee,
-      };
+    'accounts': accounts,
+    'team_members': teamMembers,
+    'team_orgs': teamOrgs,
+    'primary_orgs': primaryOrgs,
+    'primary_repos': primaryRepos,
+    'stale_review_business_days': staleReviewBusinessDays,
+    'flaky_test_keywords': flakyTestKeywords,
+    'cicd_blocked_labels': cicdBlockedLabels,
+    'presubmit_triggers': presubmitTriggers,
+    'waiting_labels': waitingLabels,
+    'cla_missing_labels': claMissingLabels,
+    'holidays': holidays.map((d) => d.toIso8601String()).toList(),
+    'pr_overrides': prOverrides.map((k, v) => MapEntry(k, v.toJson())),
+    'query_limit': queryLimit,
+    'search_assignee': searchAssignee,
+    'crowded_review_threshold': crowdedReviewThreshold,
+    'stale_co_reviewer_business_days': staleCoReviewerBusinessDays,
+  };
 }
 
 /// Outcome of loading configuration, including any non-fatal warnings that
@@ -451,8 +478,10 @@ class ConfigLoader {
     String? configPath,
     Future<String?> Function()? getCurrentUser,
   }) async {
-    final result =
-        await load(configPath: configPath, getCurrentUser: getCurrentUser);
+    final result = await load(
+      configPath: configPath,
+      getCurrentUser: getCurrentUser,
+    );
     return result.config;
   }
 

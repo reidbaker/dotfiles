@@ -39,14 +39,14 @@ class TriageResult {
   /// Full detail for the two queues, plus compact references for the
   /// highlights so the top-of-report payload stays readable.
   Map<String, dynamic> toJson() => {
-        'config': config.toJson(),
-        'truncated': truncated,
-        'warnings': warnings,
-        'top_my_work': topMyWork.map((i) => i.toRefJson()).toList(),
-        'top_review_queue': topReviewQueue.map((i) => i.toRefJson()).toList(),
-        'my_work': myWork.map((i) => i.toJson()).toList(),
-        'review_queue': reviewQueue.map((i) => i.toJson()).toList(),
-      };
+    'config': config.toJson(),
+    'truncated': truncated,
+    'warnings': warnings,
+    'top_my_work': topMyWork.map((i) => i.toRefJson()).toList(),
+    'top_review_queue': topReviewQueue.map((i) => i.toRefJson()).toList(),
+    'my_work': myWork.map((i) => i.toJson()).toList(),
+    'review_queue': reviewQueue.map((i) => i.toJson()).toList(),
+  };
 }
 
 /// Orchestrates config loading, fetching, and classification.
@@ -56,10 +56,11 @@ class TriageEngine {
     GitHubPrFetcher? fetcher,
     PrClassifier? classifier,
     TeamResolver? teamResolver,
-  })  : fs = fs ?? const LocalFileSystem(),
-        fetcher = fetcher ?? GitHubPrFetcher(),
-        classifier = classifier ?? const PrClassifier(),
-        teamResolver = teamResolver ?? TeamResolver(fs: fs ?? const LocalFileSystem());
+  }) : fs = fs ?? const LocalFileSystem(),
+       fetcher = fetcher ?? GitHubPrFetcher(),
+       classifier = classifier ?? const PrClassifier(),
+       teamResolver =
+           teamResolver ?? TeamResolver(fs: fs ?? const LocalFileSystem());
 
   final FileSystem fs;
   final GitHubPrFetcher fetcher;
@@ -77,10 +78,8 @@ class TriageEngine {
     int? limitOverride,
     bool refreshMergeable = true,
   }) async {
-    final loaded = await ConfigLoader(fs: fs).load(
-      configPath: configPath,
-      getCurrentUser: fetcher.getCurrentUser,
-    );
+    final loaded = await ConfigLoader(fs: fs)
+        .load(configPath: configPath, getCurrentUser: fetcher.getCurrentUser);
     final warnings = <String>[...loaded.warnings];
     var config = loaded.config;
 
@@ -106,8 +105,9 @@ class TriageEngine {
 
     // Cross-account collaboration means an authored PR can also come back in
     // the review queue; keep it in exactly one place.
-    final reviewItems =
-        review.items.where((pr) => !config.isMyAccount(pr.author)).toList();
+    final reviewItems = review.items
+        .where((pr) => !config.isMyAccount(pr.author))
+        .toList();
 
     final (myPrs, reviewPrs) = await _resolveMergeable(
       authored.items,
@@ -162,8 +162,15 @@ class TriageEngine {
     required bool enabled,
   }) async {
     if (!enabled) return (authored, review);
-    // Only authored PRs are gated on mergeability by the classifier.
-    return (await fetcher.refreshUnknownMergeable(authored), review);
+    // Both queues are gated on merge conflicts, so refresh them in one pass.
+    final refreshed = await fetcher.refreshUnknownMergeable([
+      ...authored,
+      ...review,
+    ]);
+    return (
+      refreshed.sublist(0, authored.length),
+      refreshed.sublist(authored.length),
+    );
   }
 
   /// Stores the org membership cache next to the config so a per-user config

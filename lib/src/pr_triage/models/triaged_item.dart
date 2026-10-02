@@ -1,10 +1,7 @@
 import 'pr_item.dart';
 
 /// Which of the two triage queues an item belongs to.
-enum QueueType {
-  myWork,
-  reviewQueue;
-}
+enum QueueType { myWork, reviewQueue }
 
 /// Common contract for a priority tier in either queue.
 ///
@@ -29,26 +26,56 @@ abstract interface class TriageTier {
 /// the single source of truth for priority.
 enum MyWorkTier implements TriageTier {
   readyToMerge(1, 'Ready to Merge', '[Action: Merge]'),
-  waitingOnCicdTask(2, 'Waiting on CI/CD Task / Action Required',
-      '[Action: Unblock CI/CD task / Trigger CI]'),
-  draftReadyForReview(3, 'Draft Ready for Review (CI Green)',
-      '[Action: Mark ready for review & notify reviewers]'),
+  waitingOnCicdTask(
+    2,
+    'Waiting on CI/CD Task / Action Required',
+    '[Action: Unblock CI/CD task / Trigger CI]',
+  ),
+  draftReadyForReview(
+    3,
+    'Draft Ready for Review (CI Green)',
+    '[Action: Mark ready for review & notify reviewers]',
+  ),
   flakyCiFailure(
-      4, 'Failing CI (Flaky candidate)', '[Action: Investigate/re-run flaky CI]'),
-  minorFeedbackWithApproval(5, 'Approved with Minor Comments',
-      '[Action: Address minor comments & land]'),
+    4,
+    'Failing CI (Flaky candidate)',
+    '[Action: Investigate/re-run flaky CI]',
+  ),
+  minorFeedbackWithApproval(
+    5,
+    'Approved with Minor Comments',
+    '[Action: Address minor comments & land]',
+  ),
   failingCiWorkRelated(
-      6, 'Failing CI (Needs Code Fix)', '[Action: Fix failing tests/lints]'),
-  substantialFeedback(7, 'Substantial Review Feedback / Changes Requested',
-      '[Action: Address review feedback]'),
-  stalledInReview(8, 'Stalled in Review (>= threshold business days)',
-      '[Action: Ping reviewer(s)]'),
+    6,
+    'Failing CI (Needs Code Fix)',
+    '[Action: Fix failing tests/lints]',
+  ),
+  substantialFeedback(
+    7,
+    'Substantial Review Feedback / Changes Requested',
+    '[Action: Address review feedback]',
+  ),
+  stalledInReview(
+    8,
+    'Stalled in Review (>= threshold business days)',
+    '[Action: Ping reviewer(s)]',
+  ),
   freshInReview(
-      9, 'In Review (within normal window)', '[Action: Awaiting review]'),
-  draft(10, 'Active Draft / WIP (Primary Repo)',
-      '[Action: Resume development / Work in progress]'),
-  nonPrimaryRepo(11, 'Repository Not In primary_orgs',
-      '[Action: Low urgency - add repo to primary_orgs to promote]'),
+    9,
+    'In Review (within normal window)',
+    '[Action: Awaiting review]',
+  ),
+  draft(
+    10,
+    'Active Draft / WIP (Primary Repo)',
+    '[Action: Resume development / Work in progress]',
+  ),
+  nonPrimaryRepo(
+    11,
+    'Repository Not In primary_orgs',
+    '[Action: Low urgency - add repo to primary_orgs to promote]',
+  ),
   forkOrPoc(12, 'Personal Fork / POC', '[Action: POC / Fork - Low urgency]');
 
   const MyWorkTier(this.rank, this.displayName, this.defaultAction);
@@ -71,22 +98,53 @@ enum MyWorkTier implements TriageTier {
 
 /// Priority tiers for incoming review requests and assignments.
 enum ReviewQueueTier implements TriageTier {
-  reReviewReady(1, 'Re-Review Ready (Feedback Addressed)',
-      '[Action: Re-review and sign off]'),
-  teamReviewRequest(2, 'Team Review Request', '[Action: Review team PR]'),
+  reReviewReady(
+    1,
+    'Re-Review Ready (Feedback Addressed)',
+    '[Action: Re-review and sign off]',
+  ),
+  teamReviewRequest(2, 'Teammate PR Review', '[Action: Review team PR]'),
   cleanExternalPr(
-      3, 'Clean External Contributor PR', '[Action: Review external PR]'),
+    3,
+    'Clean External Contributor PR',
+    '[Action: Review external PR]',
+  ),
   waitingOnAuthor(
-      4, 'Waiting on Author Response', '[Action: Awaiting author updates]'),
-  draftReview(5, 'Draft PR in Review Queue',
-      '[Action: Deprioritized - Awaiting author to mark ready for review]'),
+    4,
+    'Waiting on Author Response',
+    '[Action: Awaiting author updates]',
+  ),
+  draftReview(
+    5,
+    'Draft PR in Review Queue',
+    '[Action: Deprioritized - Awaiting author to mark ready for review]',
+  ),
+  coReviewerStalled(
+    6,
+    'Co-Reviewer Stalled',
+    '[Action: Ping co-reviewer(s) or reassign]',
+  ),
   blockedExternalPr(
-      6, 'Blocked External PR (CLA/Blockers)', '[Action: Low priority (blocked)]'),
-  nonPrimaryRepoReview(7, 'Review in Repository Not In primary_orgs',
-      '[Action: Low urgency - add repo to primary_orgs to promote]'),
+    7,
+    'Blocked External PR (CLA/Blockers)',
+    '[Action: Low priority (blocked)]',
+  ),
+  nonPrimaryRepoReview(
+    8,
+    'Review in Repository Not In primary_orgs',
+    '[Action: Low urgency - add repo to primary_orgs to promote]',
+  ),
   forkOrPocReview(
-      8, 'Personal Fork Review', '[Action: Fork Review - Low urgency]'),
-  other(9, 'Other / Backlog', '[Action: Monitor]');
+    9,
+    'Personal Fork Review',
+    '[Action: Fork Review - Low urgency]',
+  ),
+  other(10, 'Other / Backlog', '[Action: Monitor]'),
+  teamOnlyRequest(
+    11,
+    'Team-Only Request (not addressed to you)',
+    '[Action: Low priority - team request, not addressed to you]',
+  );
 
   const ReviewQueueTier(this.rank, this.displayName, this.defaultAction);
 
@@ -135,27 +193,27 @@ class TriagedItem {
   /// Compact `{repo, number, url}` reference, used by the `top_*` arrays so
   /// items are not serialized in full more than once.
   Map<String, dynamic> toRefJson() => {
-        'repo': pr.repo,
-        'number': pr.number,
-        'title': pr.title,
-        'url': pr.url,
-        'queue': queue.name,
-        'tier_name': tierName,
-        'tier_rank': tierRank,
-        'action_prompt': actionPrompt,
-        'reason': reason,
-        'business_days_elapsed': businessDaysElapsed,
-      };
+    'repo': pr.repo,
+    'number': pr.number,
+    'title': pr.title,
+    'url': pr.url,
+    'queue': queue.name,
+    'tier_name': tierName,
+    'tier_rank': tierRank,
+    'action_prompt': actionPrompt,
+    'reason': reason,
+    'business_days_elapsed': businessDaysElapsed,
+  };
 
   Map<String, dynamic> toJson() => {
-        'pr': pr.toJson(),
-        'queue': queue.name,
-        'tier': (tier as Enum).name,
-        'tier_name': tierName,
-        'tier_rank': tierRank,
-        'action_prompt': actionPrompt,
-        'reason': reason,
-        'business_days_elapsed': businessDaysElapsed,
-        'is_primary': isPrimary,
-      };
+    'pr': pr.toJson(),
+    'queue': queue.name,
+    'tier': (tier as Enum).name,
+    'tier_name': tierName,
+    'tier_rank': tierRank,
+    'action_prompt': actionPrompt,
+    'reason': reason,
+    'business_days_elapsed': businessDaysElapsed,
+    'is_primary': isPrimary,
+  };
 }
