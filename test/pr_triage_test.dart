@@ -1007,6 +1007,47 @@ cla_missing_labels:
         kConfig,
       );
       expect(item.tier, ReviewQueueTier.teamReviewRequest);
+      expect(
+        item.reason,
+        contains(
+          'jesswrd requested 10 business days ago with no review '
+          '(ping or reassign)',
+        ),
+      );
+    });
+
+    // The shape of flutter/flutter#190339: an external PR whose only red
+    // check is tree-status ranks as clean, and must still surface the ping.
+    test('a clean external PR keeps the stalled co-reviewer note', () {
+      final item = classifier().classifyReviewQueue(
+        pr(
+          author: '4akloon',
+          ciStatus: CiStatus.failing,
+          totalCheckCount: 12,
+          failingChecks: ['tree-status'],
+          requestedReviewers: ['reidbaker', 'jesswrd'],
+          lastReviewRequestedAt: DateTime(2026, 1, 1, 10),
+        ),
+        kConfig,
+      );
+      expect(item.tier, ReviewQueueTier.cleanExternalPr);
+      expect(item.reason, startsWith('External contributor PR'));
+      expect(item.reason, contains('jesswrd requested 10 business days ago'));
+    });
+
+    test('no note when the co-reviewer is inside the threshold', () {
+      final item = classifier().classifyReviewQueue(
+        pr(
+          author: '4akloon',
+          ciStatus: CiStatus.passing,
+          totalCheckCount: 12,
+          requestedReviewers: ['reidbaker', 'jesswrd'],
+          lastReviewRequestedAt: DateTime(2026, 1, 2, 10),
+        ),
+        kConfig,
+      );
+      expect(item.tier, ReviewQueueTier.cleanExternalPr);
+      expect(item.reason, isNot(contains('jesswrd')));
     });
   });
 

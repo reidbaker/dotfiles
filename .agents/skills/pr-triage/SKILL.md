@@ -140,7 +140,9 @@ Terms used below:
 7. **Co-Reviewer Stalled**: You were asked by name, and another reviewer asked
    by name has not reviewed for at least `stale_co_reviewer_business_days`
    (default 10), counted from the most recent review request. Not draft, no
-   merge conflicts. Failing CI does not rule it out.
+   merge conflicts. Failing CI does not rule it out. When a higher tier wins
+   (for example Clean External), its reason ends with the stalled reviewers
+   and "(ping or reassign)" so the ping is not lost.
    * *Action*: `[Action: Ping co-reviewer(s) or reassign]`
 8. **Blocked External PR (CLA/Blockers)**: Unsigned CLA or blocking reviews
    from the team.

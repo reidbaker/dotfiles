@@ -107,12 +107,13 @@ class PrClassifier {
       );
     }
 
+    final stalled = _checkCoReviewerStalled(pr, config, days, signals);
     final candidates = <TriagedItem>[
       ?_checkReReviewReady(pr, config, days),
       ?_checkTeamReview(pr, days, signals),
       ?_checkCleanExternal(pr, days, signals),
       ?_checkWaitingOnAuthor(pr, days, signals),
-      ?_checkCoReviewerStalled(pr, config, days, signals),
+      ?stalled,
       ?_checkBlockedExternal(pr, days, signals),
       _buildItem(
         pr: pr,
@@ -122,7 +123,19 @@ class PrClassifier {
         days: days,
       ),
     ];
-    return _annotate(_lowestRank(candidates), override);
+    final winner = _lowestRank(candidates);
+    // A higher tier wins the placement, but the stalled co-reviewer is still
+    // worth a ping, so it is kept in the reason rather than dropped.
+    if (stalled != null && !identical(winner, stalled)) {
+      return _annotate(
+        _withReasonNote(
+          winner,
+          '${_stalledNote(signals, days)} (ping or reassign)',
+        ),
+        override,
+      );
+    }
+    return _annotate(winner, override);
   }
 
   // ---------------------------------------------------------------------
@@ -501,12 +514,25 @@ class PrClassifier {
       pr: pr,
       queue: QueueType.reviewQueue,
       tier: ReviewQueueTier.coReviewerStalled,
-      reason:
-          '${s.silentCoReviewers.join(', ')} requested $days business '
-          'days ago with no review (CI: ${s.ci.label})',
+      reason: '${_stalledNote(s, days)} (CI: ${s.ci.label})',
       days: days,
     );
   }
+
+  static String _stalledNote(_ReviewSignals s, int days) =>
+      '${s.silentCoReviewers.join(', ')} requested $days business days ago '
+      'with no review';
+
+  static TriagedItem _withReasonNote(TriagedItem item, String note) =>
+      TriagedItem(
+        pr: item.pr,
+        queue: item.queue,
+        tier: item.tier,
+        reason: '${item.reason}; $note',
+        businessDaysElapsed: item.businessDaysElapsed,
+        actionOverride: item.actionOverride,
+        isPrimary: item.isPrimary,
+      );
 
   /// Tier 12. The request reached you only through a team.
   TriagedItem _teamOnlyItem(PrItem pr, int days, _ReviewSignals s) {
