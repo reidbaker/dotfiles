@@ -38,6 +38,15 @@ const List<String> kDefaultFlakyKeywords = [
   'flakiness',
 ];
 
+/// Default check names that report the state of the repository or release
+/// process rather than the pull request.
+///
+/// In `flutter/flutter` and `flutter/packages`, `tree-status` goes red when
+/// master is broken and `Check Code Freeze` goes red during a freeze. Neither
+/// says anything about the PR's own code, so neither counts as a PR CI
+/// failure.
+const List<String> kDefaultNonPrChecks = ['tree-status', 'Check Code Freeze'];
+
 /// Repositories that gate presubmit CI behind an explicit trigger label,
 /// mapped to the label that starts the run.
 ///
@@ -127,6 +136,7 @@ class TriageConfig {
     this.crowdedReviewThreshold = 4,
     this.staleCoReviewerBusinessDays = 10,
     this.mentionWindowBusinessDays = 10,
+    this.nonPrChecks = kDefaultNonPrChecks,
   });
 
   /// Factory that builds a default config around the current GitHub user.
@@ -193,6 +203,7 @@ class TriageConfig {
         'mention_window_business_days',
         'mentionWindowBusinessDays',
       ], 10),
+      nonPrChecks: _nonPrChecks(map),
     );
   }
 
@@ -240,6 +251,11 @@ class TriageConfig {
   /// "Asked for Your Review" tier, if you have not reviewed since.
   final int mentionWindowBusinessDays;
 
+  /// Check names that report repository or release state (a red tree, a code
+  /// freeze) rather than the PR. Matched case-insensitively and exactly. A
+  /// failure on one of these never counts as the PR's CI failing.
+  final List<String> nonPrChecks;
+
   /// Returns a copy with [logins] merged into [teamMembers].
   TriageConfig withTeamMembers(Iterable<String> logins) {
     final merged = {
@@ -265,6 +281,7 @@ class TriageConfig {
       crowdedReviewThreshold: crowdedReviewThreshold,
       staleCoReviewerBusinessDays: staleCoReviewerBusinessDays,
       mentionWindowBusinessDays: mentionWindowBusinessDays,
+      nonPrChecks: nonPrChecks,
     );
   }
 
@@ -296,6 +313,15 @@ class TriageConfig {
   bool isTeamMember(String username) {
     final lower = username.toLowerCase();
     return teamMembers.any((t) => t.toLowerCase() == lower);
+  }
+
+  /// Returns true if [checkName] is listed in [nonPrChecks].
+  ///
+  /// Exact rather than substring: a PR check that merely contains
+  /// "tree-status" in its name is still the PR's own check.
+  bool isNonPrCheck(String checkName) {
+    final lower = checkName.trim().toLowerCase();
+    return nonPrChecks.any((c) => c.trim().toLowerCase() == lower);
   }
 
   /// Returns the presubmit trigger label for [repo], or null when the
@@ -395,6 +421,15 @@ class TriageConfig {
     );
   }
 
+  /// Unlike the label lists, an explicit empty list is honoured rather than
+  /// replaced by the defaults, so `non_pr_checks: []` turns the feature off.
+  static List<String> _nonPrChecks(YamlMap map) {
+    const keys = ['non_pr_checks', 'nonPrChecks'];
+    final value = _firstNonNull(map, keys);
+    if (value == null) return kDefaultNonPrChecks;
+    return _toStringList(value, keys.first);
+  }
+
   static Map<String, String> _extractPresubmitTriggers(YamlMap map) {
     final scalar =
         map['presubmit_trigger_label'] ?? map['presubmitTriggerLabel'];
@@ -466,6 +501,7 @@ class TriageConfig {
     'crowded_review_threshold': crowdedReviewThreshold,
     'stale_co_reviewer_business_days': staleCoReviewerBusinessDays,
     'mention_window_business_days': mentionWindowBusinessDays,
+    'non_pr_checks': nonPrChecks,
   };
 }
 

@@ -174,6 +174,42 @@ cla_missing_labels:
       expect(custom.withTeamMembers(['x']).mentionWindowBusinessDays, 3);
       expect(custom.toJson()['mention_window_business_days'], 3);
     });
+
+    test('reads non_pr_checks, with defaults', () {
+      final defaults = TriageConfig.fromYamlString('accounts: [me]');
+      expect(defaults.nonPrChecks, ['tree-status', 'Check Code Freeze']);
+      expect(defaults.toJson()['non_pr_checks'], kDefaultNonPrChecks);
+
+      final custom = TriageConfig.fromYamlString(
+        'accounts: [me]\n'
+        'non_pr_checks:\n'
+        '  - Dashboard Checks\n',
+      );
+      expect(custom.nonPrChecks, ['Dashboard Checks']);
+      expect(custom.withTeamMembers(['x']).nonPrChecks, ['Dashboard Checks']);
+      expect(custom.toJson()['non_pr_checks'], ['Dashboard Checks']);
+
+      final camel = TriageConfig.fromYamlString(
+        'accounts: [me]\nnonPrChecks: [merge-gate]',
+      );
+      expect(camel.nonPrChecks, ['merge-gate']);
+
+      // An explicit empty list turns the feature off instead of silently
+      // restoring the defaults.
+      final off = TriageConfig.fromYamlString(
+        'accounts: [me]\nnon_pr_checks: []',
+      );
+      expect(off.nonPrChecks, isEmpty);
+    });
+
+    test('matches non-PR checks case-insensitively and exactly', () {
+      expect(kConfig.isNonPrCheck('tree-status'), isTrue);
+      expect(kConfig.isNonPrCheck('Tree-Status'), isTrue);
+      expect(kConfig.isNonPrCheck('check code freeze'), isTrue);
+      // Not a substring match: these are the PR's own checks.
+      expect(kConfig.isNonPrCheck('tree-status-lint'), isFalse);
+      expect(kConfig.isNonPrCheck('Linux tree status'), isFalse);
+    });
   });
 
   group('TriageConfig repository scoping', () {
@@ -971,6 +1007,202 @@ cla_missing_labels:
         kConfig,
       );
       expect(item.tier, ReviewQueueTier.teamReviewRequest);
+    });
+  });
+
+  group('Non-PR checks (tree-status, code freeze)', () {
+    // The shape of flutter/flutter#193595: a teammate asked you by name,
+    // mergeable, and the only red check is tree-status, which reports
+    // master rather than the PR.
+    PrItem teammateShape(List<String> failingChecks) => pr(
+      author: 'gmackall',
+      ciStatus: CiStatus.failing,
+      totalCheckCount: 29,
+      failingChecks: failingChecks,
+      requestedReviewers: ['reidbaker'],
+    );
+
+    test('a red tree does not push a teammate PR to the backlog', () {
+      final item = classifier().classifyReviewQueue(
+        teammateShape(['tree-status']),
+        kConfig,
+      );
+      expect(item.tier, ReviewQueueTier.teamReviewRequest);
+      expect(item.reason, isNot(contains('failing)')));
+      expect(item.reason, isNot(contains('CI: failing')));
+      expect(item.reason, contains('tree-status red'));
+    });
+
+    test('a real failure alongside tree-status still counts', () {
+      final item = classifier().classifyReviewQueue(
+        teammateShape(['tree-status', 'analyze']),
+        kConfig,
+      );
+      expect(item.tier, isNot(ReviewQueueTier.teamReviewRequest));
+      expect(item.reason, contains('CI is failing'));
+    });
+
+    test('matches the check name case-insensitively', () {
+      final item = classifier().classifyReviewQueue(
+        teammateShape(['Tree-Status']),
+        kConfig,
+      );
+      expect(item.tier, ReviewQueueTier.teamReviewRequest);
+    });
+
+    test('a red rollup with no named failures is still failing', () {
+      // The failing check may lie beyond the contexts that were fetched.
+      final item = classifier().classifyReviewQueue(
+        teammateShape(const []),
+        kConfig,
+      );
+      expect(item.tier, ReviewQueueTier.other);
+    });
+
+    test('a custom non_pr_checks list replaces the default', () {
+      final config = TriageConfig.fromYamlString(
+        'accounts: [reidbaker]\n'
+        'team_members: [gmackall]\n'
+        'non_pr_checks: [merge-gate]',
+      );
+      expect(
+        classifier()
+            .classifyReviewQueue(teammateShape(['merge-gate']), config)
+            .tier,
+        ReviewQueueTier.teamReviewRequest,
+      );
+      expect(
+        classifier()
+            .classifyReviewQueue(teammateShape(['tree-status']), config)
+            .tier,
+        ReviewQueueTier.other,
+      );
+    });
+
+    test('a clean external PR behind a code freeze is not called failing', () {
+      final item = classifier().classifyReviewQueue(
+        pr(
+          author: 'stranger',
+          ciStatus: CiStatus.failing,
+          totalCheckCount: 16,
+          failingChecks: ['Check Code Freeze', 'Check Code Freeze'],
+          requestedReviewers: ['reidbaker'],
+        ),
+        kConfig,
+      );
+      expect(item.tier, ReviewQueueTier.cleanExternalPr);
+      expect(item.reason, isNot(contains('CI: failing')));
+      // Duplicate check runs are named once.
+      expect(item.reason, contains('Check Code Freeze red)'));
+    });
+
+    test('an @-mention reason notes the tree instead of "CI failing"', () {
+      final item = classifier().classifyReviewQueue(
+        pr(
+          author: 'stranger',
+          ciStatus: CiStatus.failing,
+          totalCheckCount: 16,
+          failingChecks: ['tree-status'],
+          recentComments: [
+            comment('cbracken', '@reidbaker PTAL', DateTime(2026, 1, 14, 9)),
+          ],
+        ),
+        kConfig,
+      );
+      expect(item.tier, ReviewQueueTier.explicitlyAsked);
+      expect(item.reason, isNot(contains('CI failing')));
+      expect(item.reason, contains('tree-status red'));
+    });
+
+    test('a draft with only tree-status red is not reported as CI failing', () {
+      // flutter/flutter#193693 and flutter/packages#12663 both read
+      // "CI failing (1 checks)" when the one check was tree-status.
+      final item = classifier().classifyMyWork(
+        pr(
+          isDraft: true,
+          ciStatus: CiStatus.failing,
+          totalCheckCount: 16,
+          failingChecks: ['tree-status'],
+          unresolvedReviewThreads: 11,
+        ),
+        kConfig,
+      );
+      expect(item.tier, MyWorkTier.draft);
+      expect(item.reason, isNot(contains('CI failing')));
+      expect(item.reason, contains('tree-status red'));
+      expect(item.reason, contains('11 unresolved review threads'));
+    });
+
+    test('a draft with only tree-status red is not promoted as green', () {
+      // The PR's own checks may still be running behind the red rollup.
+      final item = classifier().classifyMyWork(
+        pr(
+          isDraft: true,
+          ciStatus: CiStatus.failing,
+          totalCheckCount: 16,
+          failingChecks: ['tree-status'],
+        ),
+        kConfig,
+      );
+      expect(item.tier, MyWorkTier.draft);
+      expect(item.reason, contains('PR checks not confirmed green'));
+    });
+
+    test('an approved PR held only by the tree waits instead of merging', () {
+      final item = classifier().classifyMyWork(
+        pr(
+          reviewDecision: 'APPROVED',
+          ciStatus: CiStatus.failing,
+          totalCheckCount: 16,
+          failingChecks: ['tree-status'],
+        ),
+        kConfig,
+      );
+      expect(item.tier, MyWorkTier.waitingOnCicdTask);
+      expect(item.reason, contains('merge waits for the tree'));
+      expect(item.reason, isNot(contains('CI failing')));
+      expect(item.actionPrompt, contains('tree to go green'));
+    });
+
+    test('an approved PR with a real failure behind the tree needs a fix', () {
+      final item = classifier().classifyMyWork(
+        pr(
+          reviewDecision: 'APPROVED',
+          ciStatus: CiStatus.failing,
+          totalCheckCount: 16,
+          failingChecks: ['tree-status', 'analyze'],
+        ),
+        kConfig,
+      );
+      expect(item.tier, MyWorkTier.failingCiWorkRelated);
+      expect(item.reason, endsWith(': analyze'));
+    });
+
+    test('an unapproved PR with only tree-status red is not a CI failure', () {
+      // tree-status is also a flaky keyword; it must not make the PR a
+      // flaky-CI candidate either.
+      final item = classifier().classifyMyWork(
+        pr(
+          ciStatus: CiStatus.failing,
+          totalCheckCount: 16,
+          failingChecks: ['tree-status'],
+        ),
+        kConfig,
+      );
+      expect(item.tier, MyWorkTier.freshInReview);
+    });
+
+    test('a flaky failure behind the tree lists only the PR check', () {
+      final item = classifier().classifyMyWork(
+        pr(
+          ciStatus: CiStatus.failing,
+          totalCheckCount: 16,
+          failingChecks: ['tree-status', 'Mac_android flaky_integration'],
+        ),
+        kConfig,
+      );
+      expect(item.tier, MyWorkTier.flakyCiFailure);
+      expect(item.reason, endsWith(': Mac_android flaky_integration'));
     });
   });
 

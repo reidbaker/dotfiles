@@ -90,6 +90,14 @@ flaky_test_keywords:
   - mac_android
   - flakiness
 
+# Check names that report the state of the repository or release process
+# (a red tree, a code freeze) rather than the PR. They never count as the
+# PR's CI failing. Matched case-insensitively and exactly, not as substrings.
+# Listing your own replaces these defaults; [] turns the behaviour off.
+non_pr_checks:
+  - tree-status
+  - Check Code Freeze
+
 # Also search "assignee:" alongside "review-requested:". Off by default
 # because it doubles the query count and returns nothing on Flutter repos.
 search_assignee: false

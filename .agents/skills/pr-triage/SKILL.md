@@ -43,26 +43,41 @@ Ranks are queue-local. A My Work rank 4 is not more or less urgent than a
 Review Queue rank 4; the two queues are ordered independently and never
 interleaved.
 
+**Non-PR checks.** Checks listed in `non_pr_checks` (default `tree-status` and
+`Check Code Freeze`, matched case-insensitively and exactly) report the state
+of master or the release process, not the PR. They never count as the PR's CI
+failing in any rule below, and reasons never call them "CI failing"; they
+appear as a note such as `tree-status red (repository state, not this PR)`.
+When they are the only red checks, the PR's CI is treated as not failing but
+also not green: GitHub's rollup reports a failure ahead of pending checks, and
+only failing check names are kept, so the PR's own checks may still be
+running. A red rollup with no named failing check still counts as failing.
+
 ### 1. My Work (Authored Pull Requests)
 1. **Ready to Merge**: Approved, CI positively green, zero unresolved threads,
-   not merge-blocked, not draft.
+   not merge-blocked, not draft. A PR whose only red checks are
+   `non_pr_checks` does not qualify; see tier 2.
    * *Action*: `[Action: Merge]`
 2. **Waiting on CI/CD Task / Action Required**: An author action is needed
-   before CI can run or finish. Three distinct causes: the repository gates
-   presubmits behind a trigger label (see `presubmit_triggers`) and no checks
-   have run; a `cicd_blocked_labels` label is applied; or a check run needs
-   manual approval. Never fires on drafts.
-   * *Action*: `[Action: Unblock CI/CD task / Trigger CI]`
+   before CI can run or finish, or the PR is held by repository state. Four
+   causes: the repository gates presubmits behind a trigger label (see
+   `presubmit_triggers`) and no checks have run; a `cicd_blocked_labels`
+   label is applied; a check run needs manual approval; or the PR is
+   approved, mergeable and has no unresolved threads, but the only red checks
+   are `non_pr_checks` (the merge waits for the tree). Never fires on drafts.
+   * *Action*: `[Action: Unblock CI/CD task / Trigger CI]`, or
+     `[Action: Waiting for tree to go green / freeze to resolve]` for the
+     label and repository-state causes.
 3. **Draft Ready for Review (CI Green)**: Draft with green CI, no conflicts,
    no blocking reviews, and no unresolved threads. It looks finished and was
    probably never marked ready.
    * *Action*: `[Action: Mark ready for review & notify reviewers]`
-4. **Failing CI (Flaky candidate)**: Every failing check matches
-   `flaky_test_keywords`.
+4. **Failing CI (Flaky candidate)**: Every failing PR check (ignoring
+   `non_pr_checks`) matches `flaky_test_keywords`.
    * *Action*: `[Action: Investigate/re-run flaky CI]`
 5. **Approved with Minor Comments**: Approved but with unresolved threads.
    * *Action*: `[Action: Address minor comments & land]`
-6. **Failing CI (Needs Code Fix)**: CI failures that are not flaky.
+6. **Failing CI (Needs Code Fix)**: PR check failures that are not flaky.
    * *Action*: `[Action: Fix failing tests/lints]`
 7. **Substantial Review Feedback / Changes Requested**: An active blocking
    review, or several unresolved threads.

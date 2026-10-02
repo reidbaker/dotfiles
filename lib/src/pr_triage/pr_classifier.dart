@@ -39,16 +39,17 @@ class PrClassifier {
     final scoped = _scopeItem(pr, config, QueueType.myWork, days, override);
     if (scoped != null) return scoped;
 
+    final ci = _PrCi.of(pr, config);
     if (pr.isDraft) {
-      return _annotate(_draftItem(pr, config, days), override);
+      return _annotate(_draftItem(pr, ci, days), override);
     }
 
     final candidates = <TriagedItem>[
-      ?_checkReadyToMerge(pr, days),
-      ?_checkWaitingCicd(pr, config, days),
-      ?_checkFlakyCi(pr, config, days),
+      ?_checkReadyToMerge(pr, ci, days),
+      ?_checkWaitingCicd(pr, ci, config, days),
+      ?_checkFlakyCi(pr, ci, config, days),
       ?_checkMinorFeedback(pr, days),
-      ?_checkFailingCi(pr, config, days),
+      ?_checkFailingCi(pr, ci, config, days),
       ?_checkSubstantialFeedback(pr, days),
       _reviewAgeItem(pr, config, days),
     ];
@@ -131,33 +132,43 @@ class PrClassifier {
   /// Tier 1. Requires a positive CI signal: either checks ran and passed, or
   /// the repository demonstrably runs no checks. A rollup we merely failed to
   /// parse must never produce "[Action: Merge]".
-  TriagedItem? _checkReadyToMerge(PrItem pr, int days) {
-    final ciOk = pr.hasPassingCi || pr.hasNoChecksConfigured;
-    final threadsClear =
-        pr.unresolvedThreadsExact && pr.unresolvedReviewThreads == 0;
-    if (!pr.isApproved || pr.isMergeBlocked || !ciOk || !threadsClear) {
+  ///
+  /// A PR whose only failures are [TriageConfig.nonPrChecks] is kept out on
+  /// purpose. Its own checks may still be running (see [_PrCi]), and the
+  /// merge bot holds every PR while the tree is red anyway, so "[Action:
+  /// Merge]" would send the author to do something that cannot happen yet.
+  /// [_checkWaitingCicd] picks those PRs up instead.
+  TriagedItem? _checkReadyToMerge(PrItem pr, _PrCi ci, int days) {
+    final ciOk = ci.isPassing || pr.hasNoChecksConfigured;
+    if (!pr.isApproved || pr.isMergeBlocked || !ciOk || !_threadsClear(pr)) {
       return null;
     }
     return _buildItem(
       pr: pr,
       queue: QueueType.myWork,
       tier: MyWorkTier.readyToMerge,
-      reason: pr.hasPassingCi
+      reason: ci.isPassing
           ? 'Approved, CI green, mergeable, no unresolved threads'
           : 'Approved, no CI configured, mergeable, no unresolved threads',
       days: days,
     );
   }
 
-  /// Tier 2. Only fires when the author can actually unblock CI.
+  /// Tier 2. Only fires when the author can actually unblock CI, or when an
+  /// otherwise mergeable PR is held only by repository state.
   ///
   /// The presubmit trigger label is scoped per repository because it does not
   /// exist everywhere: telling a `dart-lang` contributor to apply `CICD` asks
   /// them to add a label the repo has never defined. It also requires a
   /// positive "zero checks ran" signal rather than the absence of a rollup,
   /// and never fires on drafts, whose CI is not expected to be running.
-  TriagedItem? _checkWaitingCicd(PrItem pr, TriageConfig config, int days) {
-    if (pr.isDraft || pr.hasPassingCi) return null;
+  TriagedItem? _checkWaitingCicd(
+    PrItem pr,
+    _PrCi ci,
+    TriageConfig config,
+    int days,
+  ) {
+    if (pr.isDraft || ci.isPassing) return null;
 
     // An explicit block is checked first. A PR held behind a red tree may also
     // have no checks yet, and telling the author to trigger CI in that state
@@ -186,7 +197,7 @@ class PrClassifier {
       );
     }
 
-    if (pr.failingChecks.any(_isActionRequired)) {
+    if (ci.ownFailing.any(_isActionRequired)) {
       return _buildItem(
         pr: pr,
         queue: QueueType.myWork,
@@ -197,15 +208,36 @@ class PrClassifier {
       );
     }
 
+    // Approved and otherwise ready, but the only red checks report the tree
+    // or a freeze. Ready to Merge would overstate it (see
+    // [_checkReadyToMerge]); falling through to the review-age tiers would
+    // call an approved PR "awaiting review".
+    if (ci.isRepoStateOnly &&
+        pr.isApproved &&
+        !pr.isMergeBlocked &&
+        _threadsClear(pr)) {
+      return _buildItem(
+        pr: pr,
+        queue: QueueType.myWork,
+        tier: MyWorkTier.waitingOnCicdTask,
+        reason:
+            'Approved, mergeable, no unresolved threads; '
+            '${ci.repoStateNote}; merge waits for the tree',
+        days: days,
+        actionOverride:
+            '[Action: Waiting for tree to go green / freeze to resolve]',
+      );
+    }
+
     return null;
   }
 
   /// Tiers 3 and 10. Drafts are handled in one place so their reason string
   /// can carry the CI and review-thread state instead of discarding it.
-  TriagedItem _draftItem(PrItem pr, TriageConfig config, int days) {
+  TriagedItem _draftItem(PrItem pr, _PrCi ci, int days) {
     final blockers = _activeBlockingReviews(pr);
     final clean =
-        pr.hasPassingCi &&
+        ci.isPassing &&
         !pr.isMergeBlocked &&
         blockers.isEmpty &&
         pr.unresolvedReviewThreads == 0;
@@ -224,14 +256,16 @@ class PrClassifier {
       pr: pr,
       queue: QueueType.myWork,
       tier: MyWorkTier.draft,
-      reason: 'Draft: ${_draftBlockers(pr, blockers).join('; ')}',
+      reason: 'Draft: ${_draftBlockers(pr, ci, blockers).join('; ')}',
       days: days,
     );
   }
 
-  List<String> _draftBlockers(PrItem pr, List<PrReview> blockers) {
+  List<String> _draftBlockers(PrItem pr, _PrCi ci, List<PrReview> blockers) {
     final parts = <String>[
-      if (pr.hasFailingCi) 'CI failing (${pr.failingChecks.length} checks)',
+      if (ci.isFailing) 'CI failing (${ci.ownFailing.length} checks)',
+      if (ci.isRepoStateOnly)
+        '${ci.repoStateNote}; PR checks not confirmed green',
       if (pr.ciStatus == CiStatus.pending) 'CI still running',
       if (pr.hasNoChecksConfigured) 'no checks have run',
       if (pr.isMergeBlocked) 'merge conflicts',
@@ -244,15 +278,20 @@ class PrClassifier {
   }
 
   /// Tier 4.
-  TriagedItem? _checkFlakyCi(PrItem pr, TriageConfig config, int days) {
-    if (!pr.hasFailingCi || !_isFlakyCiFailure(pr, config)) return null;
+  TriagedItem? _checkFlakyCi(
+    PrItem pr,
+    _PrCi ci,
+    TriageConfig config,
+    int days,
+  ) {
+    if (!ci.isFailing || !_isFlakyCiFailure(ci, config)) return null;
     return _buildItem(
       pr: pr,
       queue: QueueType.myWork,
       tier: MyWorkTier.flakyCiFailure,
       reason:
           'CI failed only on known flaky checks: '
-          '${pr.failingChecks.join(', ')}',
+          '${ci.ownFailing.join(', ')}',
       days: days,
     );
   }
@@ -270,15 +309,20 @@ class PrClassifier {
   }
 
   /// Tier 6.
-  TriagedItem? _checkFailingCi(PrItem pr, TriageConfig config, int days) {
-    if (!pr.hasFailingCi || _isFlakyCiFailure(pr, config)) return null;
+  TriagedItem? _checkFailingCi(
+    PrItem pr,
+    _PrCi ci,
+    TriageConfig config,
+    int days,
+  ) {
+    if (!ci.isFailing || _isFlakyCiFailure(ci, config)) return null;
     return _buildItem(
       pr: pr,
       queue: QueueType.myWork,
       tier: MyWorkTier.failingCiWorkRelated,
       reason:
           'CI failed on checks requiring code fixes: '
-          '${pr.failingChecks.join(', ')}',
+          '${ci.ownFailing.join(', ')}',
       days: days,
     );
   }
@@ -376,6 +420,7 @@ class PrClassifier {
         .map((r) => r.author.toLowerCase())
         .toSet()
         .length;
+    final ci = _PrCi.of(pr, config);
     final parts = <String>[
       '${mention.author} asked for your review $since business days ago '
           '("${mention.excerpt}")',
@@ -383,7 +428,8 @@ class PrClassifier {
         '$approvals approval${approvals == 1 ? '' : 's'} from others',
       if (pr.isDraft) 'draft',
       if (pr.isMergeBlocked) 'merge conflicts',
-      if (pr.hasFailingCi) 'CI failing',
+      if (ci.isFailing) 'CI failing',
+      if (ci.isRepoStateOnly) ci.repoStateNote,
     ];
     return _buildItem(
       pr: pr,
@@ -397,13 +443,12 @@ class PrClassifier {
   /// Tier 3.
   TriagedItem? _checkTeamReview(PrItem pr, int days, _ReviewSignals s) {
     if (!s.isTeamAuthor || s.isBlocked || s.waitingOnAuthor) return null;
-    if (pr.hasFailingCi || pr.isMergeBlocked) return null;
+    if (s.ci.isFailing || pr.isMergeBlocked) return null;
     return _buildItem(
       pr: pr,
       queue: QueueType.reviewQueue,
       tier: ReviewQueueTier.teamReviewRequest,
-      reason:
-          'Teammate ${pr.author} is waiting on review (CI: ${pr.ciStatus.name})',
+      reason: 'Teammate ${pr.author} is waiting on review (CI: ${s.ci.label})',
       days: days,
     );
   }
@@ -411,13 +456,12 @@ class PrClassifier {
   /// Tier 4.
   TriagedItem? _checkCleanExternal(PrItem pr, int days, _ReviewSignals s) {
     if (s.isTeamAuthor || s.isBlocked || s.waitingOnAuthor) return null;
-    if (pr.hasFailingCi || pr.isMergeBlocked) return null;
+    if (s.ci.isFailing || pr.isMergeBlocked) return null;
     return _buildItem(
       pr: pr,
       queue: QueueType.reviewQueue,
       tier: ReviewQueueTier.cleanExternalPr,
-      reason:
-          'External contributor PR with no blockers (CI: ${pr.ciStatus.name})',
+      reason: 'External contributor PR with no blockers (CI: ${s.ci.label})',
       days: days,
     );
   }
@@ -459,7 +503,7 @@ class PrClassifier {
       tier: ReviewQueueTier.coReviewerStalled,
       reason:
           '${s.silentCoReviewers.join(', ')} requested $days business '
-          'days ago with no review (CI: ${pr.ciStatus.name})',
+          'days ago with no review (CI: ${s.ci.label})',
       days: days,
     );
   }
@@ -613,12 +657,16 @@ class PrClassifier {
         .toList();
   }
 
-  bool _isFlakyCiFailure(PrItem pr, TriageConfig config) {
-    if (pr.failingChecks.isEmpty) return false;
+  /// True when every unresolved thread is accounted for and none is open.
+  static bool _threadsClear(PrItem pr) =>
+      pr.unresolvedThreadsExact && pr.unresolvedReviewThreads == 0;
+
+  bool _isFlakyCiFailure(_PrCi ci, TriageConfig config) {
+    if (ci.ownFailing.isEmpty) return false;
     final keywords = config.flakyTestKeywords
         .map((k) => k.toLowerCase())
         .toList();
-    return pr.failingChecks.every((check) {
+    return ci.ownFailing.every((check) {
       final lower = check.toLowerCase();
       return keywords.any(lower.contains);
     });
@@ -723,6 +771,7 @@ class _ReviewSignals {
     required this.peopleCount,
     required this.isCrowded,
     required this.silentCoReviewers,
+    required this.ci,
   });
 
   factory _ReviewSignals.of(PrItem pr, TriageConfig config) {
@@ -759,6 +808,7 @@ class _ReviewSignals {
         for (final login in pr.requestedReviewers)
           if (!config.isMyAccount(login) && !_isBotLogin(login)) login,
       ],
+      ci: _PrCi.of(pr, config),
     );
   }
 
@@ -786,6 +836,9 @@ class _ReviewSignals {
   /// Other individually requested reviewers who have not reviewed.
   final List<String> silentCoReviewers;
 
+  /// The PR's CI with [TriageConfig.nonPrChecks] set aside.
+  final _PrCi ci;
+
   bool get isBlocked => claMissing || (blockers.isNotEmpty && !isTeamAuthor);
   bool get waitingOnAuthor => hasWaitingLabel || claMissing;
 
@@ -794,9 +847,75 @@ class _ReviewSignals {
       return 'Merge conflicts; the author needs to rebase before review is '
           'useful';
     }
-    if (pr.hasFailingCi) {
+    if (ci.isFailing) {
       return 'CI is failing; likely to change before review is useful';
     }
     return 'No clear next action for a reviewer';
   }
+}
+
+/// A PR's CI state with [TriageConfig.nonPrChecks] set aside, so that a red
+/// tree or a code freeze is never read as the PR's own CI failing.
+///
+/// Every rule reads CI through this rather than [PrItem.hasFailingCi],
+/// [PrItem.hasPassingCi] or [PrItem.failingChecks], which keeps [PrItem]
+/// free of configuration.
+///
+/// A failing rollup whose only named failures are non-PR checks
+/// ([isRepoStateOnly]) is deliberately neither failing nor passing.
+/// `PrItem._extractCiInfo` keeps only the names of failing checks, and
+/// GitHub's rollup reports `FAILURE` ahead of `PENDING`, so in that state the
+/// PR's own checks may have passed or may still be running. Nothing here
+/// claims green for it.
+class _PrCi {
+  const _PrCi._({
+    required this.status,
+    required this.ownFailing,
+    required this.repoStateFailing,
+  });
+
+  factory _PrCi.of(PrItem pr, TriageConfig config) {
+    final own = <String>[];
+    final repoState = <String>[];
+    for (final check in pr.failingChecks) {
+      (config.isNonPrCheck(check) ? repoState : own).add(check);
+    }
+    return _PrCi._(
+      status: pr.ciStatus,
+      ownFailing: own,
+      repoStateFailing: repoState,
+    );
+  }
+
+  final CiStatus status;
+
+  /// Failing checks that belong to the PR.
+  final List<String> ownFailing;
+
+  /// Failing checks that report repository or release state.
+  final List<String> repoStateFailing;
+
+  /// The rollup is red, and every named failure is a non-PR check.
+  bool get isRepoStateOnly =>
+      status == CiStatus.failing &&
+      repoStateFailing.isNotEmpty &&
+      ownFailing.isEmpty;
+
+  /// The PR's own CI is failing. A red rollup with no named failures still
+  /// counts: the failing check may sit beyond the contexts that were fetched.
+  bool get isFailing => status == CiStatus.failing && !isRepoStateOnly;
+
+  /// Checks ran and passed. Never true when [isRepoStateOnly].
+  bool get isPassing => status == CiStatus.passing;
+
+  /// For example `tree-status red (repository state, not this PR)`.
+  String get repoStateNote =>
+      '${{...repoStateFailing}.join(', ')} red '
+      '(repository state, not this PR)';
+
+  /// Status for `CI: ...` reason fragments. Never says "failing" when only
+  /// non-PR checks are red.
+  String get label => isRepoStateOnly
+      ? 'no PR check failing; ${{...repoStateFailing}.join(', ')} red'
+      : status.name;
 }
