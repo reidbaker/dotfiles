@@ -168,6 +168,7 @@ class GitHubPrFetcher {
     unresolvedReviewThreads: item.unresolvedReviewThreads,
     totalReviewThreads: item.totalReviewThreads,
     unresolvedThreadsExact: item.unresolvedThreadsExact,
+    unresolvedThreadParticipants: item.unresolvedThreadParticipants,
     labels: item.labels,
     updatedAt: item.updatedAt,
     createdAt: item.createdAt,
@@ -278,6 +279,7 @@ class GitHubPrFetcher {
     enriched['unresolvedReviewThreads'] = threads.unresolved;
     enriched['totalReviewThreads'] = threads.total;
     enriched['unresolvedThreadsExact'] = threads.exact;
+    enriched['unresolvedThreadParticipants'] = threads.participants;
 
     enriched['headCommitDate'] = _firstMap(
       node['commits'],
@@ -297,25 +299,65 @@ class GitHubPrFetcher {
   ///
   /// When GitHub has more threads than the page we read, `unresolved` is only
   /// a lower bound, so `== 0` must not be read as "everything is resolved".
-  static ({int unresolved, int total, bool exact}) _summarizeThreads(
-    dynamic threads,
-  ) {
-    if (threads is! Map) return (unresolved: 0, total: 0, exact: true);
+  ///
+  /// `participants` holds the distinct comment authors of each unresolved
+  /// thread. A thread with more comments than were read gets an empty list,
+  /// so it is never mistaken for a thread involving only known accounts.
+  static ({
+    int unresolved,
+    int total,
+    bool exact,
+    List<List<String>> participants,
+  })
+  _summarizeThreads(dynamic threads) {
+    const none = <List<String>>[];
+    if (threads is! Map) {
+      return (unresolved: 0, total: 0, exact: true, participants: none);
+    }
 
     final total = (threads['totalCount'] ?? 0) as int;
     final nodes = threads['nodes'];
-    if (nodes is! List) return (unresolved: 0, total: total, exact: true);
+    if (nodes is! List) {
+      return (unresolved: 0, total: total, exact: true, participants: none);
+    }
 
     var unresolved = 0;
+    final participants = <List<String>>[];
     for (final thread in nodes) {
-      if (thread is Map && thread['isResolved'] == false) unresolved++;
+      if (thread is! Map || thread['isResolved'] != false) continue;
+      unresolved++;
+      participants.add(_threadAuthors(thread['comments']));
     }
 
     var exact = total <= nodes.length;
     if (threads['pageInfo'] case final Map pageInfo) {
       exact = exact && pageInfo['hasNextPage'] != true;
     }
-    return (unresolved: unresolved, total: total, exact: exact);
+    return (
+      unresolved: unresolved,
+      total: total,
+      exact: exact,
+      participants: participants,
+    );
+  }
+
+  /// Distinct comment authors of one thread, or an empty list when the
+  /// comments were not selected or were truncated.
+  static List<String> _threadAuthors(dynamic comments) {
+    if (comments is! Map) return const [];
+    final nodes = comments['nodes'];
+    if (nodes is! List || nodes.isEmpty) return const [];
+    final count = comments['totalCount'];
+    if (count is int && count > nodes.length) return const [];
+    final authors = <String>{};
+    for (final node in nodes) {
+      final author = node is Map ? node['author'] : null;
+      final login = author is Map ? author['login'] : null;
+      // A deleted account has no author; treat the thread as unknown.
+      if (login == null || login.toString().isEmpty) return const [];
+      authors.add(login.toString());
+    }
+    return authors.toList();
   }
 
   static Map<dynamic, dynamic>? _firstMap(dynamic connection) {
@@ -347,6 +389,8 @@ class GitHubPrFetcher {
   /// - `comments(last: 15)` bodies are selected so an explicit "@you, please
   ///   review" is visible. Only the parsed mentions and a short excerpt are
   ///   kept, so output size stays bounded.
+  /// - Review-thread comment authors so a thread that only your own accounts
+  ///   took part in is not reported as reviewer feedback to address.
   static const String _searchQueryDocument = r'''
 query($searchQuery: String!, $limit: Int!) {
   search(query: $searchQuery, type: ISSUE, first: $limit) {
@@ -389,7 +433,10 @@ query($searchQuery: String!, $limit: Int!) {
         reviewThreads(first: 100) {
           totalCount
           pageInfo { hasNextPage }
-          nodes { isResolved }
+          nodes {
+            isResolved
+            comments(first: 20) { totalCount nodes { author { login } } }
+          }
         }
         commits(last: 1) {
           nodes {

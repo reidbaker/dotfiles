@@ -53,6 +53,15 @@ also not green: GitHub's rollup reports a failure ahead of pending checks, and
 only failing check names are kept, so the PR's own checks may still be
 running. A red rollup with no named failing check still counts as failing.
 
+**Threads between your own accounts.** Feedback you leave on your agent's PR
+is work for the agent, so it counts like any other thread. Once one of your
+accounts has approved (and has not since requested changes or had the
+approval dismissed), threads where only your configured `accounts` commented
+stop counting: the PR waits on other reviewers or CI, not on you. Threads with
+any other commenter, or whose comments could not all be read, always count.
+"Unresolved threads" in My Work below means threads that count under this
+rule.
+
 ### 1. My Work (Authored Pull Requests)
 1. **Ready to Merge**: Approved, CI positively green, zero unresolved threads,
    not merge-blocked, not draft. A PR whose only red checks are

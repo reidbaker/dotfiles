@@ -41,16 +41,16 @@ class PrClassifier {
 
     final ci = _PrCi.of(pr, config);
     if (pr.isDraft) {
-      return _annotate(_draftItem(pr, ci, days), override);
+      return _annotate(_draftItem(pr, ci, config, days), override);
     }
 
     final candidates = <TriagedItem>[
-      ?_checkReadyToMerge(pr, ci, days),
+      ?_checkReadyToMerge(pr, ci, config, days),
       ?_checkWaitingCicd(pr, ci, config, days),
       ?_checkFlakyCi(pr, ci, config, days),
-      ?_checkMinorFeedback(pr, days),
+      ?_checkMinorFeedback(pr, config, days),
       ?_checkFailingCi(pr, ci, config, days),
-      ?_checkSubstantialFeedback(pr, days),
+      ?_checkSubstantialFeedback(pr, config, days),
       _reviewAgeItem(pr, config, days),
     ];
     return _annotate(_lowestRank(candidates), override);
@@ -151,9 +151,17 @@ class PrClassifier {
   /// merge bot holds every PR while the tree is red anyway, so "[Action:
   /// Merge]" would send the author to do something that cannot happen yet.
   /// [_checkWaitingCicd] picks those PRs up instead.
-  TriagedItem? _checkReadyToMerge(PrItem pr, _PrCi ci, int days) {
+  TriagedItem? _checkReadyToMerge(
+    PrItem pr,
+    _PrCi ci,
+    TriageConfig config,
+    int days,
+  ) {
     final ciOk = ci.isPassing || pr.hasNoChecksConfigured;
-    if (!pr.isApproved || pr.isMergeBlocked || !ciOk || !_threadsClear(pr)) {
+    if (!pr.isApproved ||
+        pr.isMergeBlocked ||
+        !ciOk ||
+        !_threadsClear(pr, config)) {
       return null;
     }
     return _buildItem(
@@ -228,7 +236,7 @@ class PrClassifier {
     if (ci.isRepoStateOnly &&
         pr.isApproved &&
         !pr.isMergeBlocked &&
-        _threadsClear(pr)) {
+        _threadsClear(pr, config)) {
       return _buildItem(
         pr: pr,
         queue: QueueType.myWork,
@@ -247,13 +255,11 @@ class PrClassifier {
 
   /// Tiers 3 and 10. Drafts are handled in one place so their reason string
   /// can carry the CI and review-thread state instead of discarding it.
-  TriagedItem _draftItem(PrItem pr, _PrCi ci, int days) {
+  TriagedItem _draftItem(PrItem pr, _PrCi ci, TriageConfig config, int days) {
     final blockers = _activeBlockingReviews(pr);
+    final open = _openThreads(pr, config);
     final clean =
-        ci.isPassing &&
-        !pr.isMergeBlocked &&
-        blockers.isEmpty &&
-        pr.unresolvedReviewThreads == 0;
+        ci.isPassing && !pr.isMergeBlocked && blockers.isEmpty && open == 0;
 
     if (clean) {
       return _buildItem(
@@ -269,12 +275,17 @@ class PrClassifier {
       pr: pr,
       queue: QueueType.myWork,
       tier: MyWorkTier.draft,
-      reason: 'Draft: ${_draftBlockers(pr, ci, blockers).join('; ')}',
+      reason: 'Draft: ${_draftBlockers(pr, ci, blockers, open).join('; ')}',
       days: days,
     );
   }
 
-  List<String> _draftBlockers(PrItem pr, _PrCi ci, List<PrReview> blockers) {
+  List<String> _draftBlockers(
+    PrItem pr,
+    _PrCi ci,
+    List<PrReview> blockers,
+    int openThreads,
+  ) {
     final parts = <String>[
       if (ci.isFailing) 'CI failing (${ci.ownFailing.length} checks)',
       if (ci.isRepoStateOnly)
@@ -282,8 +293,7 @@ class PrClassifier {
       if (pr.ciStatus == CiStatus.pending) 'CI still running',
       if (pr.hasNoChecksConfigured) 'no checks have run',
       if (pr.isMergeBlocked) 'merge conflicts',
-      if (pr.unresolvedReviewThreads > 0)
-        '${pr.unresolvedReviewThreads} unresolved review threads',
+      if (openThreads > 0) '$openThreads unresolved review threads',
       if (blockers.isNotEmpty)
         'changes requested by ${blockers.map((r) => r.author).join(', ')}',
     ];
@@ -310,13 +320,14 @@ class PrClassifier {
   }
 
   /// Tier 5.
-  TriagedItem? _checkMinorFeedback(PrItem pr, int days) {
-    if (!pr.isApproved || pr.unresolvedReviewThreads == 0) return null;
+  TriagedItem? _checkMinorFeedback(PrItem pr, TriageConfig config, int days) {
+    final open = _openThreads(pr, config);
+    if (!pr.isApproved || open == 0) return null;
     return _buildItem(
       pr: pr,
       queue: QueueType.myWork,
       tier: MyWorkTier.minorFeedbackWithApproval,
-      reason: 'Approved with ${pr.unresolvedReviewThreads} unresolved comments',
+      reason: 'Approved with $open unresolved comments',
       days: days,
     );
   }
@@ -341,14 +352,18 @@ class PrClassifier {
   }
 
   /// Tier 7.
-  TriagedItem? _checkSubstantialFeedback(PrItem pr, int days) {
+  TriagedItem? _checkSubstantialFeedback(
+    PrItem pr,
+    TriageConfig config,
+    int days,
+  ) {
     final blockers = _activeBlockingReviews(pr);
-    if (blockers.isEmpty && pr.unresolvedReviewThreads == 0) return null;
+    final open = _openThreads(pr, config);
+    if (blockers.isEmpty && open == 0) return null;
     final parts = <String>[
       if (blockers.isNotEmpty)
         'changes requested by ${blockers.map((r) => r.author).join(', ')}',
-      if (pr.unresolvedReviewThreads > 0)
-        '${pr.unresolvedReviewThreads} unresolved review threads',
+      if (open > 0) '$open unresolved review threads',
     ];
     return _buildItem(
       pr: pr,
@@ -683,9 +698,35 @@ class PrClassifier {
         .toList();
   }
 
+  /// Unresolved threads the author still has to act on.
+  ///
+  /// Feedback you leave on your agent's PR is real work while the PR is in
+  /// progress, since agents often are not watching. Once one of your accounts
+  /// has approved, threads only your own accounts took part in are settled:
+  /// the PR waits on other reviewers or CI, not on you.
+  static int _openThreads(PrItem pr, TriageConfig config) =>
+      _approvedByMe(pr, config)
+      ? pr.unresolvedThreadsExcluding(config.isMyAccount)
+      : pr.unresolvedReviewThreads;
+
+  /// True when your accounts' most recent verdict on the PR is an approval.
+  ///
+  /// `COMMENTED` reviews are skipped because they do not withdraw an approval
+  /// on GitHub. A later change request or a dismissal does.
+  static bool _approvedByMe(PrItem pr, TriageConfig config) {
+    PrReview? latest;
+    for (final r in [...pr.allReviews, ...pr.latestReviews]) {
+      if (!config.isMyAccount(r.author) || r.isCommented) continue;
+      if (latest == null || r.submittedAt.isAfter(latest.submittedAt)) {
+        latest = r;
+      }
+    }
+    return latest?.isApproved ?? false;
+  }
+
   /// True when every unresolved thread is accounted for and none is open.
-  static bool _threadsClear(PrItem pr) =>
-      pr.unresolvedThreadsExact && pr.unresolvedReviewThreads == 0;
+  static bool _threadsClear(PrItem pr, TriageConfig config) =>
+      pr.unresolvedThreadsExact && _openThreads(pr, config) == 0;
 
   bool _isFlakyCiFailure(_PrCi ci, TriageConfig config) {
     if (ci.ownFailing.isEmpty) return false;

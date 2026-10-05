@@ -152,6 +152,7 @@ class PrItem {
     this.unresolvedReviewThreads = 0,
     this.totalReviewThreads = 0,
     this.unresolvedThreadsExact = true,
+    this.unresolvedThreadParticipants = const [],
     this.labels = const [],
     required this.updatedAt,
     required this.createdAt,
@@ -205,6 +206,10 @@ class PrItem {
                   json['unresolved_threads_exact'] ??
                   true)
               as bool,
+      unresolvedThreadParticipants: _extractThreadParticipants(
+        json['unresolvedThreadParticipants'] ??
+            json['unresolved_thread_participants'],
+      ),
       labels: _extractLabels(json['labels']),
       updatedAt: _parseDate(json['updatedAt']) ?? DateTime.now(),
       createdAt: _parseDate(json['createdAt']) ?? DateTime.now(),
@@ -254,6 +259,11 @@ class PrItem {
   /// False when more review threads exist than were fetched, in which case
   /// [unresolvedReviewThreads] is a lower bound and `== 0` must not be trusted.
   final bool unresolvedThreadsExact;
+
+  /// The distinct comment authors of each unresolved thread that was read in
+  /// full. A thread whose comments were truncated is recorded as an empty
+  /// list, so it never looks like it involves only known people.
+  final List<List<String>> unresolvedThreadParticipants;
   final List<String> labels;
   final DateTime updatedAt;
   final DateTime createdAt;
@@ -282,6 +292,22 @@ class PrItem {
   bool get isChangesRequested => reviewDecision == 'CHANGES_REQUESTED';
   bool get hasFailingCi => ciStatus == CiStatus.failing;
   bool get hasPassingCi => ciStatus == CiStatus.passing;
+
+  /// Unresolved threads, minus those where every commenter matches [isMine].
+  ///
+  /// The classifier uses this once you have approved your agent's PR: a
+  /// self-review thread is then settled, and must not hold the PR in a
+  /// "needs work" tier while other reviewers have not looked yet. Threads with
+  /// unknown participants, and threads beyond the fetched page, still count.
+  int unresolvedThreadsExcluding(bool Function(String login) isMine) {
+    final internal = unresolvedThreadParticipants
+        .where((authors) => authors.isNotEmpty && authors.every(isMine))
+        .length;
+    return (unresolvedReviewThreads - internal).clamp(
+      0,
+      unresolvedReviewThreads,
+    );
+  }
 
   /// True only when GitHub positively reported a conflict. `UNKNOWN` is not a
   /// conflict, it is an absence of information.
@@ -344,6 +370,18 @@ class PrItem {
   static DateTime? _parseDate(dynamic value) {
     if (value == null) return null;
     return DateTime.tryParse(value.toString());
+  }
+
+  static List<List<String>> _extractThreadParticipants(dynamic json) {
+    if (json is! List) return const [];
+    return [
+      for (final thread in json)
+        if (thread is List)
+          [
+            for (final login in thread)
+              if (login.toString().trim().isNotEmpty) login.toString().trim(),
+          ],
+    ];
   }
 
   static List<String> _extractLabels(dynamic labelsJson) {
@@ -509,6 +547,7 @@ class PrItem {
     'unresolved_review_threads': unresolvedReviewThreads,
     'total_review_threads': totalReviewThreads,
     'unresolved_threads_exact': unresolvedThreadsExact,
+    'unresolved_thread_participants': unresolvedThreadParticipants,
     'labels': labels,
     'updated_at': updatedAt.toIso8601String(),
     'created_at': createdAt.toIso8601String(),

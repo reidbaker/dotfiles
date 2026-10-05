@@ -33,6 +33,7 @@ PrItem pr({
   List<String> failingChecks = const [],
   int unresolvedReviewThreads = 0,
   bool unresolvedThreadsExact = true,
+  List<List<String>> unresolvedThreadParticipants = const [],
   List<String> labels = const [],
   DateTime? createdAt,
   DateTime? headCommitDate,
@@ -59,6 +60,7 @@ PrItem pr({
     failingChecks: failingChecks,
     unresolvedReviewThreads: unresolvedReviewThreads,
     unresolvedThreadsExact: unresolvedThreadsExact,
+    unresolvedThreadParticipants: unresolvedThreadParticipants,
     labels: labels,
     updatedAt: created,
     createdAt: created,
@@ -522,6 +524,176 @@ cla_missing_labels:
         kConfig,
       );
       expect(item.tier, MyWorkTier.minorFeedbackWithApproval);
+    });
+
+    group('threads between your own accounts', () {
+      final approvedAt = kNow.subtract(const Duration(hours: 4));
+      final approval = review('reidbaker', 'APPROVED', approvedAt);
+      const selfThreads = [
+        ['reidbaker'],
+        ['reidbaker', 'reidbaker-agent'],
+        ['ReidBaker-Agent', 'reidbaker'],
+      ];
+
+      test('stop counting once you approved your agent\'s PR', () {
+        // flutter/flutter#193693: authored by reidbaker-agent, approved by
+        // reidbaker, waiting on other reviewers. It was ranked as
+        // substantial feedback because of 13 threads between the accounts.
+        final item = classifier().classifyMyWork(
+          pr(
+            author: 'reidbaker-agent',
+            reviewDecision: 'REVIEW_REQUIRED',
+            ciStatus: CiStatus.passing,
+            totalCheckCount: 27,
+            unresolvedReviewThreads: 3,
+            unresolvedThreadParticipants: selfThreads,
+            latestReviews: [approval],
+            requestedReviewers: ['camsim99', 'gmackall'],
+          ),
+          kConfig,
+        );
+        expect(item.tier, MyWorkTier.freshInReview);
+      });
+
+      test('count as work before you approve', () {
+        // Agents often are not watching, so your feedback is work to route.
+        final item = classifier().classifyMyWork(
+          pr(
+            author: 'reidbaker-agent',
+            ciStatus: CiStatus.passing,
+            totalCheckCount: 4,
+            unresolvedReviewThreads: 3,
+            unresolvedThreadParticipants: selfThreads,
+            latestReviews: [review('reidbaker', 'COMMENTED', approvedAt)],
+          ),
+          kConfig,
+        );
+        expect(item.tier, MyWorkTier.substantialFeedback);
+        expect(item.reason, contains('3 unresolved review threads'));
+      });
+
+      test('count again after a later change request from you', () {
+        final item = classifier().classifyMyWork(
+          pr(
+            author: 'reidbaker-agent',
+            ciStatus: CiStatus.passing,
+            totalCheckCount: 4,
+            headCommitDate: kNow.subtract(const Duration(days: 2)),
+            unresolvedReviewThreads: 1,
+            unresolvedThreadParticipants: [
+              ['reidbaker'],
+            ],
+            allReviews: [
+              approval,
+              review(
+                'reidbaker',
+                'CHANGES_REQUESTED',
+                kNow.subtract(const Duration(hours: 1)),
+              ),
+            ],
+          ),
+          kConfig,
+        );
+        expect(item.tier, MyWorkTier.substantialFeedback);
+      });
+
+      test('a later COMMENTED review does not withdraw your approval', () {
+        final item = classifier().classifyMyWork(
+          pr(
+            author: 'reidbaker-agent',
+            ciStatus: CiStatus.passing,
+            totalCheckCount: 4,
+            unresolvedReviewThreads: 1,
+            unresolvedThreadParticipants: [
+              ['reidbaker'],
+            ],
+            allReviews: [
+              approval,
+              review(
+                'reidbaker',
+                'COMMENTED',
+                kNow.subtract(const Duration(hours: 1)),
+              ),
+            ],
+          ),
+          kConfig,
+        );
+        expect(item.tier, MyWorkTier.freshInReview);
+      });
+
+      test('a thread with an outside commenter still counts', () {
+        final item = classifier().classifyMyWork(
+          pr(
+            author: 'reidbaker-agent',
+            ciStatus: CiStatus.passing,
+            totalCheckCount: 4,
+            unresolvedReviewThreads: 2,
+            unresolvedThreadParticipants: [
+              ['reidbaker', 'reidbaker-agent'],
+              ['gmackall', 'reidbaker-agent'],
+            ],
+            latestReviews: [approval],
+          ),
+          kConfig,
+        );
+        expect(item.tier, MyWorkTier.substantialFeedback);
+        expect(item.reason, contains('1 unresolved review threads'));
+      });
+
+      test('a thread with unknown participants still counts', () {
+        // Truncated comment lists are recorded as an empty list.
+        final item = classifier().classifyMyWork(
+          pr(
+            author: 'reidbaker-agent',
+            reviewDecision: 'APPROVED',
+            ciStatus: CiStatus.passing,
+            totalCheckCount: 4,
+            unresolvedReviewThreads: 1,
+            unresolvedThreadParticipants: [<String>[]],
+            latestReviews: [approval],
+          ),
+          kConfig,
+        );
+        expect(item.tier, MyWorkTier.minorFeedbackWithApproval);
+      });
+
+      test('approved by others with only settled self threads can merge', () {
+        final item = classifier().classifyMyWork(
+          pr(
+            author: 'reidbaker-agent',
+            reviewDecision: 'APPROVED',
+            ciStatus: CiStatus.passing,
+            totalCheckCount: 4,
+            unresolvedReviewThreads: 1,
+            unresolvedThreadParticipants: [
+              ['reidbaker', 'reidbaker-agent'],
+            ],
+            latestReviews: [approval, review('gmackall', 'APPROVED', kNow)],
+          ),
+          kConfig,
+        );
+        expect(item.tier, MyWorkTier.readyToMerge);
+      });
+
+      test('a truncated thread list is never clear', () {
+        // Threads beyond the fetched page are unknown, so the PR is not clear.
+        final item = classifier().classifyMyWork(
+          pr(
+            author: 'reidbaker-agent',
+            reviewDecision: 'APPROVED',
+            ciStatus: CiStatus.passing,
+            totalCheckCount: 4,
+            unresolvedReviewThreads: 1,
+            unresolvedThreadsExact: false,
+            unresolvedThreadParticipants: [
+              ['reidbaker'],
+            ],
+            latestReviews: [approval],
+          ),
+          kConfig,
+        );
+        expect(item.tier, isNot(MyWorkTier.readyToMerge));
+      });
     });
 
     test('a human blocking review is substantial feedback', () {
@@ -1304,6 +1476,51 @@ cla_missing_labels:
       final item = result.items.single;
       expect(item.allReviews.single.author, 'reidbaker');
       expect(item.recentComments.single.author, 'cbracken');
+    });
+
+    test('the fetcher records who took part in each open thread', () async {
+      final runner = _RecordingRunner(
+        response: '''
+{"data":{"search":{"issueCount":1,"nodes":[{
+  "number": 193693,
+  "repository": {"nameWithOwner": "flutter/flutter"},
+  "author": {"login": "reidbaker-agent"},
+  "reviewThreads": {"totalCount": 5, "pageInfo": {"hasNextPage": false},
+   "nodes": [
+    {"isResolved": false, "comments": {"totalCount": 3, "nodes": [
+      {"author": {"login": "reidbaker"}},
+      {"author": {"login": "reidbaker-agent"}},
+      {"author": {"login": "reidbaker"}}]}},
+    {"isResolved": true, "comments": {"totalCount": 1, "nodes": [
+      {"author": {"login": "gemini-code-assist"}}]}},
+    {"isResolved": false, "comments": {"totalCount": 30, "nodes": [
+      {"author": {"login": "reidbaker"}}]}},
+    {"isResolved": false, "comments": {"totalCount": 1, "nodes": [
+      {"author": null}]}},
+    {"isResolved": false}
+  ]}
+}]}}}''',
+      );
+      final result = await GitHubPrFetcher(runner: runner.call)
+          .fetchAuthored(authors: ['reidbaker-agent']);
+      final item = result.items.single;
+      expect(item.unresolvedReviewThreads, 4);
+      expect(item.unresolvedThreadParticipants, [
+        ['reidbaker', 'reidbaker-agent'],
+        <String>[],
+        <String>[],
+        <String>[],
+      ]);
+      expect(item.unresolvedThreadsExcluding(kConfig.isMyAccount), 3);
+
+      final again = PrItem.fromJson({
+        'unresolved_thread_participants': item
+            .toJson()['unresolved_thread_participants'],
+      });
+      expect(
+        again.unresolvedThreadParticipants,
+        item.unresolvedThreadParticipants,
+      );
     });
   });
 
