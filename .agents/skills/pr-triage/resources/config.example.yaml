@@ -13,6 +13,7 @@ accounts:
 primary_orgs:
   - flutter
   - dart-lang
+  - google
 
 # Specific repositories to treat as primary regardless of owner.
 primary_repos: []
