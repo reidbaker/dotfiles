@@ -1,0 +1,30 @@
+# Adversarial review trust configuration.
+#
+# Copy this file to config.yaml and edit it. config.yaml is gitignored.
+#
+# Before a review runs a change's code (tests, builds, scripts), it checks the
+# PR author and every commit author and committer against this list. If anyone
+# is not trusted, the review runs the security pass in
+# references/security-pass.md first.
+#
+# A key you leave out uses its default. A key set to [] trusts nobody by that
+# route.
+
+# Members of these GitHub organizations are trusted. Org membership that is
+# private is only visible with a token that has the read:org scope. Without
+# it, private members show up as untrusted (the check fails closed).
+trusted_orgs:
+  - flutter
+  - dart-lang
+
+# Active members of these teams are trusted. Format: org/team-slug.
+trusted_teams:
+  - flutter/flutter-hackers
+
+# Individual GitHub logins to trust, for people outside the groups above.
+trusted_users: []
+
+# Logins skipped entirely. web-flow is GitHub's committer for web edits and
+# merges; the real author of those commits is still checked.
+ignored_logins:
+  - web-flow
