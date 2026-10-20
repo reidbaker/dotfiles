@@ -309,6 +309,22 @@ class PrItem {
     );
   }
 
+  /// Unresolved threads, read in full, that the PR author never replied to.
+  ///
+  /// A push after a review does not mean the feedback was addressed. A thread
+  /// the author has not answered is still waiting on them. Truncated threads
+  /// (recorded as empty lists) are skipped because their participants are
+  /// unknown.
+  int get unresolvedThreadsUnansweredByAuthor {
+    final me = author.toLowerCase();
+    return unresolvedThreadParticipants
+        .where(
+          (authors) =>
+              authors.isNotEmpty && !authors.any((a) => a.toLowerCase() == me),
+        )
+        .length;
+  }
+
   /// True only when GitHub positively reported a conflict. `UNKNOWN` is not a
   /// conflict, it is an absence of information.
   bool get isMergeBlocked => mergeable == 'CONFLICTING' || mergeable == 'DIRTY';

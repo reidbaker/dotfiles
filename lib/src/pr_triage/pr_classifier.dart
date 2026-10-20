@@ -81,6 +81,13 @@ class PrClassifier {
       );
     }
 
+    // You reviewed before and the author still owes a response. This is
+    // decided here so a clean-looking external or team PR cannot outrank it.
+    final reReview = _checkReReviewReady(pr, config, days);
+    if (reReview != null && reReview.tier == ReviewQueueTier.waitingOnAuthor) {
+      return _annotate(reReview, override);
+    }
+
     final signals = _ReviewSignals.of(pr, config);
 
     // A request that reached you only through a team is checked before the
@@ -408,6 +415,32 @@ class PrClassifier {
     final pushedSince = head != null && head.isAfter(mine.submittedAt);
     final reRequested = pr.requestedReviewers.any(config.isMyAccount);
     if (!pushedSince && !reRequested) return null;
+
+    // A push or a re-request is not proof the feedback was addressed. Merge
+    // conflicts, or threads the author never answered, mean the next move is
+    // still the author's.
+    final unanswered = pr.unresolvedThreadsUnansweredByAuthor;
+    if (pr.isMergeBlocked || unanswered > 0) {
+      final unansweredBy = {
+        for (final t in pr.unresolvedThreadParticipants)
+          if (t.isNotEmpty &&
+              !t.any((a) => a.toLowerCase() == pr.author.toLowerCase()))
+            ...t,
+      }.join(', ');
+      return _buildItem(
+        pr: pr,
+        queue: QueueType.reviewQueue,
+        tier: ReviewQueueTier.waitingOnAuthor,
+        reason: [
+          'Re-review requested, but the author still has work to do',
+          if (pr.isMergeBlocked) 'merge conflicts',
+          if (unanswered > 0)
+            '$unanswered unresolved threads with no author reply '
+                '($unansweredBy)',
+        ].join('; '),
+        days: days,
+      );
+    }
 
     return _buildItem(
       pr: pr,

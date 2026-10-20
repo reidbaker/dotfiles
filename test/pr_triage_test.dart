@@ -888,6 +888,80 @@ cla_missing_labels:
       expect(item.tier, ReviewQueueTier.reReviewReady);
     });
 
+    test('a re-request with merge conflicts waits on the author', () {
+      final item = classifier().classifyReviewQueue(
+        pr(
+          author: 'stranger',
+          mergeable: 'CONFLICTING',
+          ciStatus: CiStatus.passing,
+          totalCheckCount: 3,
+          allReviews: [
+            review(
+              'reidbaker',
+              'DISMISSED',
+              kNow.subtract(const Duration(days: 5)),
+            ),
+          ],
+          requestedReviewers: ['reidbaker'],
+        ),
+        kConfig,
+      );
+      expect(item.tier, ReviewQueueTier.waitingOnAuthor);
+      expect(item.reason, contains('merge conflicts'));
+    });
+
+    test('threads the author never answered keep it on the author', () {
+      final item = classifier().classifyReviewQueue(
+        pr(
+          author: 'stranger',
+          ciStatus: CiStatus.passing,
+          totalCheckCount: 3,
+          allReviews: [
+            review(
+              'reidbaker',
+              'COMMENTED',
+              kNow.subtract(const Duration(days: 5)),
+            ),
+          ],
+          headCommitDate: kNow.subtract(const Duration(days: 1)),
+          unresolvedReviewThreads: 2,
+          unresolvedThreadParticipants: [
+            ['bkonyi'],
+            ['bkonyi', 'Stranger'],
+          ],
+        ),
+        kConfig,
+      );
+      expect(item.tier, ReviewQueueTier.waitingOnAuthor);
+      expect(
+        item.reason,
+        contains('1 unresolved threads with no author reply'),
+      );
+      expect(item.reason, contains('bkonyi'));
+    });
+
+    test('threads the author answered do not block re-review', () {
+      final item = classifier().classifyReviewQueue(
+        pr(
+          author: 'stranger',
+          allReviews: [
+            review(
+              'reidbaker',
+              'COMMENTED',
+              kNow.subtract(const Duration(days: 5)),
+            ),
+          ],
+          headCommitDate: kNow.subtract(const Duration(days: 1)),
+          unresolvedReviewThreads: 1,
+          unresolvedThreadParticipants: [
+            ['bkonyi', 'stranger'],
+          ],
+        ),
+        kConfig,
+      );
+      expect(item.tier, ReviewQueueTier.reReviewReady);
+    });
+
     test('a teammate PR outranks an external one', () {
       final team = classifier().classifyReviewQueue(
         pr(author: 'gmackall', ciStatus: CiStatus.passing, totalCheckCount: 3),
@@ -1533,11 +1607,12 @@ cla_missing_labels:
       List<String> requestedTeams = const [],
       bool isDraft = false,
       DateTime? headCommitDate,
+      String mergeable = 'CONFLICTING',
     }) => pr(
       repo: 'flutter/packages',
       author: 'stranger',
       isDraft: isDraft,
-      mergeable: 'CONFLICTING',
+      mergeable: mergeable,
       ciStatus: CiStatus.failing,
       totalCheckCount: 3,
       failingChecks: ['analyze'],
@@ -1635,10 +1710,25 @@ cla_missing_labels:
           ],
           allReviews: [review('reidbaker', 'COMMENTED', DateTime(2026, 1, 12))],
           headCommitDate: DateTime(2026, 1, 13),
+          mergeable: 'MERGEABLE',
         ),
         kConfig,
       );
       expect(item.tier, ReviewQueueTier.reReviewReady);
+    });
+
+    test('an ask outranks a re-review the author still owes work on', () {
+      final item = classifier().classifyReviewQueue(
+        askedShape(
+          comments: [
+            comment('cbracken', '@reidbaker ptal', DateTime(2026, 1, 14)),
+          ],
+          allReviews: [review('reidbaker', 'COMMENTED', DateTime(2026, 1, 12))],
+          headCommitDate: DateTime(2026, 1, 13),
+        ),
+        kConfig,
+      );
+      expect(item.tier, ReviewQueueTier.explicitlyAsked);
     });
 
     test('lifts a team-only draft when you are asked by name', () {
