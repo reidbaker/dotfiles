@@ -67,7 +67,7 @@ class TriageEngine {
   final PrClassifier classifier;
   final TeamResolver teamResolver;
 
-  /// Runs a full triage pass.
+  /// Runs a full triage pass, or triages only [prSpecs] when non-empty.
   ///
   /// [topCount] controls how many highlights each queue reports. Set
   /// [refreshMergeable] to false in tests to skip the second network round
@@ -76,6 +76,7 @@ class TriageEngine {
     String? configPath,
     int topCount = 3,
     int? limitOverride,
+    List<PrSpec> prSpecs = const [],
     bool refreshMergeable = true,
   }) async {
     final loaded = await ConfigLoader(fs: fs)
@@ -94,24 +95,11 @@ class TriageEngine {
     config = await _withResolvedTeam(config, configPath, warnings);
 
     final limit = limitOverride ?? config.queryLimit;
-    final (authored, review) = await (
-      fetcher.fetchAuthored(authors: config.accounts, limit: limit),
-      fetcher.fetchReviewQueue(
-        reviewers: config.accounts,
-        limit: limit,
-        includeAssignee: config.searchAssignee,
-      ),
-    ).wait;
-
-    // Cross-account collaboration means an authored PR can also come back in
-    // the review queue; keep it in exactly one place.
-    final reviewItems = review.items
-        .where((pr) => !config.isMyAccount(pr.author))
-        .toList();
+    final queues = await _fetchQueues(config, limit, prSpecs);
 
     final (myPrs, reviewPrs) = await _resolveMergeable(
-      authored.items,
-      reviewItems,
+      queues.authored,
+      queues.review,
       enabled: refreshMergeable,
     );
 
@@ -128,6 +116,37 @@ class TriageEngine {
       topMyWork: myWork.take(topCount).toList(),
       topReviewQueue: reviewQueue.take(topCount).toList(),
       warnings: warnings,
+      truncated: queues.truncated,
+    );
+  }
+
+  Future<({List<PrItem> authored, List<PrItem> review, bool truncated})>
+  _fetchQueues(TriageConfig config, int limit, List<PrSpec> prSpecs) async {
+    if (prSpecs.isNotEmpty) {
+      final items = await fetcher.fetchSpecificPrs(prSpecs);
+      return (
+        authored: items.where((pr) => config.isMyAccount(pr.author)).toList(),
+        review: items.where((pr) => !config.isMyAccount(pr.author)).toList(),
+        truncated: false,
+      );
+    }
+    final (authored, review) = await (
+      fetcher.fetchAuthored(authors: config.accounts, limit: limit),
+      fetcher.fetchReviewQueue(
+        reviewers: config.accounts,
+        limit: limit,
+        includeAssignee: config.searchAssignee,
+      ),
+    ).wait;
+
+    // Cross-account collaboration means an authored PR can also come back in
+    // the review queue; keep it in exactly one place.
+    final reviewItems = review.items
+        .where((pr) => !config.isMyAccount(pr.author))
+        .toList();
+    return (
+      authored: authored.items,
+      review: reviewItems,
       truncated: authored.truncated || review.truncated,
     );
   }

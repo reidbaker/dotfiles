@@ -15,6 +15,32 @@ Future<ProcessResult> defaultCommandRunner(
   List<String> arguments,
 ) => Process.run(executable, arguments);
 
+/// Identifies a single pull request by repository (`owner/name`) and number.
+class PrSpec {
+  const PrSpec(this.repo, this.number);
+
+  static final RegExp _pattern = RegExp(
+    r'^(?:https?://github\.com/)?([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)(?:#|/pull/)(\d+)(?:[/?#].*)?$',
+  );
+
+  /// Parses `owner/name#123` or `https://github.com/owner/name/pull/123`.
+  factory PrSpec.parse(String raw) {
+    final match = _pattern.firstMatch(raw.trim());
+    if (match == null) {
+      throw FormatException(
+        'Expected owner/name#number or a GitHub PR URL, got "$raw".',
+      );
+    }
+    return PrSpec(match.group(1)!, int.parse(match.group(2)!));
+  }
+
+  final String repo;
+  final int number;
+
+  @override
+  String toString() => '$repo#$number';
+}
+
 /// Result of a PR search, including whether GitHub had more results than the
 /// configured page size allowed us to read.
 class PrSearchResult {
@@ -81,6 +107,29 @@ class GitHubPrFetcher {
       for (final query in queries) _searchPrsViaGraphQL(query, limit: limit),
     ]);
     return _merge(results);
+  }
+
+  /// Fetches the specific pull requests in [specs].
+  Future<List<PrItem>> fetchSpecificPrs(List<PrSpec> specs) async {
+    if (specs.isEmpty) return const [];
+    final results = await Future.wait([
+      for (final spec in specs) _fetchSinglePr(spec),
+    ]);
+    return [for (final item in results) ?item];
+  }
+
+  Future<PrItem?> _fetchSinglePr(PrSpec spec) async {
+    final result = await _searchPrsViaGraphQL(
+      'repo:${spec.repo} is:pr ${spec.number}',
+      limit: 10,
+    );
+    for (final item in result.items) {
+      if (item.number == spec.number &&
+          item.repo.toLowerCase() == spec.repo.toLowerCase()) {
+        return item;
+      }
+    }
+    return null;
   }
 
   /// Re-reads `mergeable` for PRs whose first read returned `UNKNOWN`.

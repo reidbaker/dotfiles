@@ -174,13 +174,15 @@ Terms used below:
 ## Execution Procedure
 
 ### Step 1: Run the CLI
-From the repository root:
+From the devconfig repository root (this skill lives at
+`<root>/.agents/skills/pr-triage`):
 ```bash
 dart run bin/pr_triage.dart
 ```
-Useful flags: `--config` for an alternate config path, `--limit` to change how
-many PRs are fetched per query (GitHub caps this at 100), `--top` to change how
-many highlights each queue reports.
+Useful flags: `--pr <owner/repo#number>` (repeatable or comma-separated, or a
+GitHub PR URL) to triage only specific PRs, `--config` for an alternate config
+path, `--limit` to change how many PRs are fetched per query (GitHub caps this
+at 100), `--top` to change how many highlights each queue reports.
 
 ### Step 2: Parse the results
 JSON goes to stdout; warnings go to stderr. Read stderr too, it is where an

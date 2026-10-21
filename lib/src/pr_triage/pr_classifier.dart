@@ -421,12 +421,6 @@ class PrClassifier {
     // still the author's.
     final unanswered = pr.unresolvedThreadsUnansweredByAuthor;
     if (pr.isMergeBlocked || unanswered > 0) {
-      final unansweredBy = {
-        for (final t in pr.unresolvedThreadParticipants)
-          if (t.isNotEmpty &&
-              !t.any((a) => a.toLowerCase() == pr.author.toLowerCase()))
-            ...t,
-      }.join(', ');
       return _buildItem(
         pr: pr,
         queue: QueueType.reviewQueue,
@@ -436,7 +430,7 @@ class PrClassifier {
           if (pr.isMergeBlocked) 'merge conflicts',
           if (unanswered > 0)
             '$unanswered unresolved threads with no author reply '
-                '($unansweredBy)',
+                '(${_unansweredParticipants(pr)})',
         ].join('; '),
         days: days,
       );
@@ -452,6 +446,13 @@ class PrClassifier {
       days: days,
     );
   }
+
+  static String _unansweredParticipants(PrItem pr) => {
+    for (final t in pr.unresolvedThreadParticipants)
+      if (t.isNotEmpty &&
+          !t.any((a) => a.toLowerCase() == pr.author.toLowerCase()))
+        ...t,
+  }.join(', ');
 
   /// Tier 2: a human @-mentioned one of your accounts in a PR comment within
   /// [TriageConfig.mentionWindowBusinessDays], and you have not reviewed

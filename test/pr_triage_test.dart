@@ -1877,6 +1877,51 @@ cla_missing_labels:
       // Full PR payloads belong in my_work, not in the highlights.
       expect(top.containsKey('pr'), isFalse);
     });
+
+    test('triages only requested prSpecs and partitions by author', () async {
+      final result =
+          await TriageEngine(
+            fs: fs,
+            fetcher: _FakeFetcher(
+              specific: [
+                pr(number: 10, author: 'reidbaker'),
+                pr(number: 20, author: 'someone-else'),
+              ],
+            ),
+            classifier: classifier(),
+            teamResolver: _FakeResolver(fs, const {}),
+          ).runTriage(
+            configPath: '/config.yaml',
+            prSpecs: [
+              PrSpec.parse('flutter/flutter#10'),
+              PrSpec.parse('https://github.com/flutter/flutter/pull/20'),
+            ],
+            refreshMergeable: false,
+          );
+
+      expect(result.myWork.single.pr.number, 10);
+      expect(result.reviewQueue.single.pr.number, 20);
+      expect(result.truncated, isFalse);
+    });
+  });
+
+  group('PrSpec.parse', () {
+    test('parses owner/repo#number and GitHub URLs', () {
+      final short = PrSpec.parse('flutter/flutter#193693');
+      expect(short.repo, 'flutter/flutter');
+      expect(short.number, 193693);
+
+      final url = PrSpec.parse(
+        'https://github.com/google/skills_lint.dart/pull/103/files',
+      );
+      expect(url.repo, 'google/skills_lint.dart');
+      expect(url.number, 103);
+    });
+
+    test('rejects bare numbers or malformed strings', () {
+      expect(() => PrSpec.parse('193693'), throwsFormatException);
+      expect(() => PrSpec.parse('flutter#193693'), throwsFormatException);
+    });
   });
 
   group('GitHub search query construction', () {
@@ -1946,6 +1991,13 @@ cla_missing_labels:
       expect(both.queries, hasLength(2));
       expect(both.queries.any((q) => q.contains('assignee:')), isTrue);
     });
+
+    test('fetches specific PR specs by repo and number', () async {
+      final runner = _RecordingRunner();
+      await GitHubPrFetcher(runner: runner.call)
+          .fetchSpecificPrs([PrSpec.parse('flutter/flutter#193693')]);
+      expect(runner.queries, ['searchQuery=repo:flutter/flutter is:pr 193693']);
+    });
   });
 }
 
@@ -1954,12 +2006,14 @@ class _FakeFetcher extends GitHubPrFetcher {
   _FakeFetcher({
     this.authored = const [],
     this.reviews = const [],
+    this.specific = const [],
     this.truncated = false,
     this.currentUser = 'reidbaker',
   }) : super(runner: _unreachableRunner);
 
   final List<PrItem> authored;
   final List<PrItem> reviews;
+  final List<PrItem> specific;
   final bool truncated;
   final String? currentUser;
 
@@ -1978,6 +2032,9 @@ class _FakeFetcher extends GitHubPrFetcher {
     int limit = 50,
     bool includeAssignee = false,
   }) async => PrSearchResult(items: reviews);
+
+  @override
+  Future<List<PrItem>> fetchSpecificPrs(List<PrSpec> specs) async => specific;
 
   @override
   Future<List<PrItem>> refreshUnknownMergeable(
