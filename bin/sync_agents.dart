@@ -1,33 +1,32 @@
 #!/usr/bin/env dart
 
 import 'dart:io';
+
 import 'package:args/args.dart';
 import 'package:dotfiles/agent_syncer.dart';
 import 'package:path/path.dart' as p;
 
-
 void main(List<String> arguments) {
-  final parser =
-      ArgParser()
-        ..addFlag('help', abbr: 'h', negatable: false, help: 'Show this help.')
-        ..addFlag(
-          'dry-run',
-          abbr: 'n',
-          negatable: false,
-          help: 'Preview changes without modifying filesystem.',
-        )
-        ..addFlag(
-          'quiet',
-          abbr: 'q',
-          negatable: false,
-          help: 'Suppress non-error output.',
-        )
-        ..addOption('dotfiles-dir', help: 'Path to dotfiles directory.')
-        ..addOption(
-          'home-dir',
-          help: 'Path to user home directory.',
-          defaultsTo: Platform.environment['HOME'],
-        );
+  final parser = ArgParser()
+    ..addFlag('help', abbr: 'h', negatable: false, help: 'Show this help.')
+    ..addFlag(
+      'dry-run',
+      abbr: 'n',
+      negatable: false,
+      help: 'Preview changes without modifying filesystem.',
+    )
+    ..addFlag(
+      'quiet',
+      abbr: 'q',
+      negatable: false,
+      help: 'Suppress non-error output.',
+    )
+    ..addOption('dotfiles-dir', help: 'Path to dotfiles directory.')
+    ..addOption(
+      'home-dir',
+      help: 'Path to user home directory.',
+      defaultsTo: Platform.environment['HOME'],
+    );
 
   final ArgResults results;
   try {

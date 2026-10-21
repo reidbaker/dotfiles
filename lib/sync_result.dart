@@ -18,13 +18,12 @@ class SyncResult {
     ...agentActions,
   ];
 
-  int get totalLinked =>
-      allActions
-          .where(
-            (a) =>
-                a.type == SyncActionType.linked ||
-                a.type == SyncActionType.updated ||
-                a.type == SyncActionType.backedUpAndLinked,
-          )
-          .length;
+  int get totalLinked => allActions
+      .where(
+        (a) =>
+            a.type == SyncActionType.linked ||
+            a.type == SyncActionType.updated ||
+            a.type == SyncActionType.backedUpAndLinked,
+      )
+      .length;
 }

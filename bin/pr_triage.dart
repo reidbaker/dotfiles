@@ -18,10 +18,13 @@ const List<String> _configSegments = [
 Future<void> main(List<String> args) async {
   final parser = ArgParser()
     ..addOption('config', abbr: 'c', help: 'Path to config.yaml.')
-    ..addOption('limit',
-        abbr: 'l', help: 'Max PRs to fetch per query (1-100).')
-    ..addOption('top',
-        abbr: 't', defaultsTo: '3', help: 'Highlights per queue.')
+    ..addOption('limit', abbr: 'l', help: 'Max PRs to fetch per query (1-100).')
+    ..addOption(
+      'top',
+      abbr: 't',
+      defaultsTo: '3',
+      help: 'Highlights per queue.',
+    )
     ..addFlag('help', abbr: 'h', negatable: false, help: 'Show usage.');
 
   final ArgResults opts;
@@ -51,11 +54,8 @@ Future<void> main(List<String> args) async {
   final configPath = opts.option('config') ?? _findConfig(fs);
 
   try {
-    final result = await TriageEngine(fs: fs).runTriage(
-      configPath: configPath,
-      topCount: top,
-      limitOverride: limit,
-    );
+    final result = await TriageEngine(fs: fs)
+        .runTriage(configPath: configPath, topCount: top, limitOverride: limit);
 
     for (final warning in result.warnings) {
       stderr.writeln('warning: $warning');

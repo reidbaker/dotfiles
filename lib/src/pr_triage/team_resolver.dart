@@ -32,8 +32,8 @@ class TeamResolver {
     CommandRunner? runner,
     this.cacheTtl = const Duration(hours: 24),
     DateTime Function()? clock,
-  })  : _runner = runner ?? defaultCommandRunner,
-        _clock = clock ?? DateTime.now;
+  }) : _runner = runner ?? defaultCommandRunner,
+       _clock = clock ?? DateTime.now;
 
   final FileSystem fs;
   final CommandRunner _runner;
@@ -129,7 +129,6 @@ class TeamResolver {
     return (cursor == null || cursor.isEmpty) ? null : cursor;
   }
 
-
   Set<String>? _readCache(String? cachePath, List<String> orgs) {
     if (cachePath == null) return null;
     final file = fs.file(cachePath);
@@ -140,7 +139,9 @@ class TeamResolver {
       if (decoded is! Map) return null;
       if (_cacheKey(orgs) != decoded['orgs']) return null;
 
-      final fetchedAt = DateTime.tryParse(decoded['fetched_at']?.toString() ?? '');
+      final fetchedAt = DateTime.tryParse(
+        decoded['fetched_at']?.toString() ?? '',
+      );
       if (fetchedAt == null) return null;
       if (_clock().difference(fetchedAt) > cacheTtl) return null;
 
@@ -157,11 +158,13 @@ class TeamResolver {
     try {
       final file = fs.file(cachePath);
       file.parent.createSync(recursive: true);
-      file.writeAsStringSync(jsonEncode({
-        'orgs': _cacheKey(orgs),
-        'fetched_at': _clock().toIso8601String(),
-        'members': members.toList()..sort(),
-      }));
+      file.writeAsStringSync(
+        jsonEncode({
+          'orgs': _cacheKey(orgs),
+          'fetched_at': _clock().toIso8601String(),
+          'members': members.toList()..sort(),
+        }),
+      );
     } catch (_) {
       // A non-writable cache directory must not fail the run.
     }

@@ -150,10 +150,7 @@ class AgentSyncer {
   }
 
   List<Directory> _listSubdirectories(Directory parent) {
-    return parent
-        .listSync()
-        .whereType<Directory>()
-        .toList()
+    return parent.listSync().whereType<Directory>().toList()
       ..sort((a, b) => a.path.compareTo(b.path));
   }
 
@@ -214,10 +211,9 @@ class AgentSyncer {
       );
     }
 
-    final linkTarget =
-        relativeLink
-            ? pathContext.relative(srcPath, from: targetParentDir)
-            : srcPath;
+    final linkTarget = relativeLink
+        ? pathContext.relative(srcPath, from: targetParentDir)
+        : srcPath;
 
     final destType = fs.typeSync(destLinkPath, followLinks: false);
 

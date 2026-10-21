@@ -32,14 +32,12 @@ void main() {
     fs.file('$path/agent.json').writeAsStringSync('{"name": "$name"}');
   }
 
-  Link userSkillLink(String name) =>
-      fs.link('$homeDir/.agents/skills/$name');
+  Link userSkillLink(String name) => fs.link('$homeDir/.agents/skills/$name');
 
   Link geminiSkillLink(String name) =>
       fs.link('$dotfilesDir/.gemini/skills/$name');
 
-  Link userAgentLink(String name) =>
-      fs.link('$homeDir/.agents/agents/$name');
+  Link userAgentLink(String name) => fs.link('$homeDir/.agents/agents/$name');
 
   void expectSymlink(Link link, String expectedTarget) {
     expect(link.existsSync(), isTrue, reason: '${link.path} should exist');
@@ -176,9 +174,9 @@ void main() {
 
     test('handles missing optional source directories gracefully', () {
       final emptyFs = MemoryFileSystem(style: FileSystemStyle.posix);
-      emptyFs.directory('$dotfilesDir/.agents/skills').createSync(
-        recursive: true,
-      );
+      emptyFs
+          .directory('$dotfilesDir/.agents/skills')
+          .createSync(recursive: true);
 
       final syncer = createSyncer(fileSystem: emptyFs);
       final result = syncer.syncAll();
