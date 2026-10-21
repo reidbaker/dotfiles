@@ -54,6 +54,7 @@ Symlink dotfiles into your home directory:
 
 ```bash
 ln -sf ~/devconfig/.zshrc ~/.zshrc
+ln -sf ~/devconfig/.zshenv ~/.zshenv
 ln -sf ~/devconfig/.gitconfig ~/.gitconfig
 ln -sf ~/devconfig/.bash_aliases ~/.bash_aliases
 ln -sf ~/devconfig/.vimrc ~/.vimrc
