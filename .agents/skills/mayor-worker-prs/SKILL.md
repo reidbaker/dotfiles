@@ -14,7 +14,7 @@ Paste this section into every worker prompt. Workers can't be assumed to read th
 1. **Identity.** Push over HTTPS as the agent account. Run `gh auth status` before any push or PR command. Push with an explicit URL: `git push https://github.com/<owner>/<repo>.git <branch>`.
 2. **Fresh worktree.** Run the package's dependency fetch (`dart pub get`, `flutter pub get`) before you format, analyze or test. A missing fetch gives false failures.
 3. **Never rewrite history on a branch with an open PR.** No rebase, amend, squash or force-push, not even for unpushed commits. Add new commits. Reviewers review one commit at a time, and a rewrite resets their progress.
-4. **Squash-merged base.** When a PR this branch depends on is squash-merged, run `git merge origin/main`. Don't rebase.
+4. **Squash-merged base.** When a PR this branch depends on is squash-merged, merge the default branch (`git merge origin/main`, or `master` where that is the default) right away without asking. Don't rebase.
 5. **Verify before pushing.** Run the repo's full definition of done and wait for every command to finish. Paste the output tails into the report.
 6. **CI on every OS is part of done.** Local runs can't catch Windows path bugs. After the push, report the CI result for each OS. Don't report "done" on local results alone.
 7. **Don't push while a question is open.** If you asked the mayor something, wait for the answer.
