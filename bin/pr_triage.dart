@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:args/args.dart';
 import 'package:dotfiles/src/pr_triage/github_fetcher.dart';
+import 'package:dotfiles/src/pr_triage/thread_scanner.dart';
 import 'package:dotfiles/src/pr_triage/triage_engine.dart';
 import 'package:file/local.dart';
 import 'package:path/path.dart' as p;
@@ -20,6 +21,10 @@ Future<void> main(List<String> args) async {
   final parser = _buildParser();
   final opts = _parseArgs(parser, args);
   if (opts == null) return;
+  if (opts.flag('threads')) {
+    exitCode = await runThreads(opts);
+    return;
+  }
 
   final limit = _parseInt(opts.option('limit'), 'limit');
   final top = _parseInt(opts.option('top'), 'top') ?? 3;
@@ -55,6 +60,27 @@ ArgParser _buildParser() => ArgParser()
     'pr',
     help: 'Specific PR(s) to triage (owner/repo#N or GitHub PR URL).',
   )
+  ..addFlag(
+    'threads',
+    negatable: false,
+    help: 'List reviewer feedback the agent has not answered (needs --repo).',
+  )
+  ..addOption('repo', help: '--threads: repository as owner/name.')
+  ..addOption(
+    'agent',
+    help: '--threads: login whose reply marks a thread done.',
+  )
+  ..addOption('since', help: '--threads: ISO time or duration (e.g. 6h).')
+  ..addOption(
+    'include-merged',
+    defaultsTo: '2d',
+    help: '--threads: include PRs merged within this duration.',
+  )
+  ..addMultiOption(
+    'ignore-author',
+    help: '--threads: login to treat like the agent (repeatable).',
+  )
+  ..addFlag('json', negatable: false, help: '--threads: print JSON.')
   ..addFlag('help', abbr: 'h', negatable: false, help: 'Show usage.');
 
 ArgResults? _parseArgs(ArgParser parser, List<String> args) {
@@ -128,4 +154,50 @@ String? _findConfig(LocalFileSystem fs) {
     if (fs.file(fallback).existsSync()) return fallback;
   }
   return null;
+}
+
+/// Runs `--threads` mode and returns the process exit code.
+Future<int> runThreads(ArgResults opts, {ThreadScanner? scanner}) async {
+  final options = _threadOptions(opts, DateTime.now());
+  if (options == null) return 64;
+  final result = await (scanner ?? ThreadScanner()).scan(options);
+  if (opts.flag('json')) {
+    stdout.writeln(const JsonEncoder.withIndent('  ').convert(result.toJson()));
+  } else {
+    stdout.write(formatThreadReport(result));
+  }
+  for (final failure in result.failures) {
+    stderr.writeln('error: fetch failed, report is incomplete: $failure');
+  }
+  return result.failures.isEmpty ? 0 : 1;
+}
+
+ThreadScanOptions? _threadOptions(ArgResults opts, DateTime now) {
+  final repo = opts.option('repo');
+  if (repo == null || !RegExp(r'^[\w.-]+/[\w.-]+$').hasMatch(repo)) {
+    stderr.writeln('--threads requires --repo owner/name.');
+    return null;
+  }
+  final merged = parseDuration(opts.option('include-merged')!);
+  if (merged == null) {
+    stderr.writeln('--include-merged must be a duration such as 2d or 12h.');
+    return null;
+  }
+  final rawSince = opts.option('since');
+  DateTime? since;
+  if (rawSince != null) {
+    final d = parseDuration(rawSince);
+    since = d != null ? now.subtract(d) : DateTime.tryParse(rawSince);
+    if (since == null) {
+      stderr.writeln('--since must be an ISO time or a duration such as 6h.');
+      return null;
+    }
+  }
+  return ThreadScanOptions(
+    repo: repo,
+    agent: opts.option('agent'),
+    since: since,
+    includeMerged: merged,
+    ignoreAuthors: opts.multiOption('ignore-author').toSet(),
+  );
 }

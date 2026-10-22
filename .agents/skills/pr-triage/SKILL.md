@@ -219,3 +219,29 @@ directory, with:
 * Blocked on a CI/CD task: offer to apply the trigger label or approve the run.
 * Flaky failure: offer to inspect logs and re-run.
 * Stalled: offer to draft a ping comment.
+
+---
+
+## Unanswered Reviewer Feedback (`--threads`)
+
+Run this before you end a review round and before you give the user a task
+list. Comments arrive mid-round and land on PRs that merge minutes later, so
+re-check every time.
+
+```bash
+dart run bin/pr_triage.dart --threads --repo <owner/repo> --agent <login> \
+  [--since <ISO time or 6h>] [--include-merged 2d] [--ignore-author <login>] [--json]
+```
+
+It lists, per PR: unresolved review threads whose last comment is not from
+`--agent` (outdated ones are marked), non-empty human review bodies, and
+non-bot PR comments. PRs merged within `--include-merged` appear in a separate
+section; their feedback needs a follow-up PR. On a merged PR an `--agent` reply
+posted after the merge counts as an answer only if it links PRs or issues (`#N` or a GitHub URL) that
+are all merged or closed; otherwise the thread stays listed with the reason,
+such as `[follow-up #130 still open]`. `--ignore-author` (repeatable)
+treats a login like the agent, for example to see reviewer threads answered
+only by the maintainer.
+
+A non-zero exit or any `FETCH FAILURE` line means the report is incomplete.
+Do not call the round done until a run exits 0.
