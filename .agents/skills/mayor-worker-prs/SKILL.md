@@ -16,7 +16,7 @@ Paste this section into every worker prompt. Workers can't be assumed to read th
 3. **Never rewrite history on a branch with an open PR.** No rebase, amend, squash or force-push, not even for unpushed commits. Add new commits. Reviewers review one commit at a time, and a rewrite resets their progress.
 4. **Squash-merged base.** When a PR this branch depends on is squash-merged, merge the default branch (`git merge origin/main`, or `master` where that is the default) right away without asking. Don't rebase.
 5. **Verify before pushing.** Run the repo's full definition of done and wait for every command to finish. Paste the output tails into the report.
-6. **CI on every OS is part of done.** Local runs can't catch Windows path bugs. After the push, report the CI result for each OS. Don't report "done" on local results alone.
+6. **CI on every OS is part of done.** Local runs can't catch Windows path bugs. After the push, report the CI result for each OS. Don't report "done" on local results alone. To wait for CI, run `gh pr checks <n> -R <owner>/<repo> --watch`.
 7. **Don't push while a question is open.** If you asked the mayor something, wait for the answer.
 8. **No silent deletions.** Name every removed comment, docstring, test or eval assertion in the PR body, with the reason.
 9. **Scope.** Explain every change outside the PR's stated scope, or leave it out and list it in the report.
@@ -32,7 +32,7 @@ Paste this section into every worker prompt. Workers can't be assumed to read th
    ```bash
    dart run bin/pr_triage.dart --pr <owner>/<repo>#<n1>,<owner>/<repo>#<n2>
    ```
-   Use the returned `tier_name`, `action_prompt`, `reason`, `ci_status`, and `failing_checks` rather than hand-rolling `gh pr checks` or `gh api` loops. `pr_triage.dart` already ignores repository-wide checks (`tree-status`, `Check Code Freeze`), ignores settled self-review threads between the user's own accounts once approved, and keeps re-review PRs on the author until the author has pushed or replied after the user's last review.
+   Use the returned `tier_name`, `action_prompt`, `reason`, `ci_status`, and `failing_checks` rather than hand-rolling `gh pr checks` or `gh api` loops. `pr_triage.dart` already ignores repository-wide checks (`tree-status`, `Check Code Freeze`), ignores settled self-review threads between the user's own accounts once approved, and keeps re-review PRs on the author until the author has pushed or replied after the user's last review. `pr_triage.dart` takes a snapshot; to wait for CI to finish, use `gh pr checks <n> -R <owner>/<repo> --watch`.
 2. **Before filing an issue,** search open and closed issues: `gh issue list -R <owner>/<repo> --state all --search "<keywords>"`.
 3. **Context summaries** list every open PR and every issue filed during the work, with numbers. A summary that drops an issue leads to duplicates.
 4. **Workers can't see your context.** Put the hard rules (worker rules 3, 5, 6, 7 and 11 at least) in every prompt, including follow-up messages that ask for fixes.
