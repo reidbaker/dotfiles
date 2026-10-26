@@ -1,0 +1,18 @@
+# Worker brief
+
+Paste this whole file into every worker prompt, including follow-up fix requests.
+
+1. **Identity.** Push over HTTPS as the agent account. Run `gh auth status` before any push or PR command. Push with an explicit URL: `git push https://github.com/<owner>/<repo>.git <branch>`. Only the worker that owns the branch pushes to it.
+2. **Fresh worktree.** Run the package's dependency fetch (`dart pub get`, `flutter pub get`) before you format, analyze or test. A missing fetch gives false failures.
+3. **Never rewrite history.** No rebase, amend, squash or force-push, not even for unpushed commits. Add new commits. To update a branch, merge the default branch (`git merge origin/main`, or `master` where that is the default) without asking, for example right after a base PR is squash-merged. Rewrites reset reviewers' progress and unanchor review threads.
+4. **Verify before pushing.** Run the repo's full definition of done and wait for every command to finish. Paste the output tails into the report.
+5. **CI on every OS is part of done.** Local runs can't catch Windows path bugs. After the push, report the CI result for each OS. Don't report "done" on local results alone. To wait for CI, run `gh pr checks <n> -R <owner>/<repo> --watch`.
+6. **Don't push while a question is open.** If you asked the mayor something, wait for the answer.
+7. **No silent deletions.** In the PR body, name every comment, docstring, test or eval assertion that the PR removes *from the base*, with the reason. Leave out changes made and undone within the PR.
+8. **Scope.** A fix for a bug that already exists on the base goes in its own small PR, unless this PR depends on it. Docs for a feature ship in the same PR as the feature, never in a follow-up. Explain any other change outside the stated scope, or leave it out and list it in the report.
+9. **Links.** Open every URL you add. Never invent one.
+10. **PR descriptions.** If the repo has a PR-description skill or a `.github/PULL_REQUEST_TEMPLATE.md`, follow it; it wins over this brief. Copy template checklists verbatim, never from memory. Describe the PR as a whole against its base, and make sure the description matches the code. List commits only when they are few and meaningful. No CI logs. To update a PR, fetch the live body first (`gh pr view <N> -R <owner>/<repo> --json body -q .body > body.md`) and keep all human-written text.
+11. **Review threads.** Never resolve a thread; the maintainer does. If a later commit makes an earlier reply wrong, add a short follow-up reply with the commit SHA. Never reply in a thread opened by a human who reviewed by hand, and post no PR-level comment addressed to them. Draft those replies in a local file for the mayor. Write every reply as a direct statement of what changed or what you suggest. Don't point back to an earlier discussion ("see Option A").
+12. **Report** to the mayor: PR URL, head SHA, what changed, the definition-of-done tails, CI per OS, and any judgment calls the user should check. Flag anything hard to reverse, and any missing supply-chain or security practice.
+13. **Summarize the tests.** When you add or change tests, say in a few lines what situation each group of tests covers, that you checked for change-detector tests, false positives and false negatives, and that a failure prints enough to debug from the CI log. Keep it short, and put it in your report and in your reply to the maintainer's review, not in the PR description.
+14. **TODO owners.** A TODO names whoever committed to the work: `TODO(<maintainer>): <issue URL>` only when the maintainer said they will do it later; otherwise use your own agent login. Never attribute your deferral to the maintainer.
