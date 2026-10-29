@@ -774,7 +774,6 @@ RankedReview rankReview(
   required int k,
   String personSlug = 'reid-baker',
   int passIndex = 1,
-  String authorRelationship = 'insider',
   int lineWindow = 3,
   double similarity = 0.5,
 }) {
@@ -851,7 +850,6 @@ RankedReview rankReview(
     comments: kept,
     verdict: reviewVerdict(
       passIndex: passIndex,
-      authorRelationship: authorRelationship,
       maxSeverity: max,
       majorCount: majorCount,
       hasBlockingScopeCreep: hasBlockingScopeCreep,
@@ -861,9 +859,11 @@ RankedReview rankReview(
 }
 
 /// The review verdict for a pass with the given maximum comment severity.
+///
+/// The verdict never depends on who authored the PR: accounts are often
+/// shared between a person and their agents.
 String reviewVerdict({
   required int passIndex,
-  required String authorRelationship,
   required String? maxSeverity,
   int majorCount = 0,
   bool hasBlockingScopeCreep = false,
@@ -872,10 +872,7 @@ String reviewVerdict({
   if (rank >= severities.indexOf('blocking')) return 'REQUEST_CHANGES';
   if (hasBlockingScopeCreep) return 'REQUEST_CHANGES';
   if (passIndex <= 1) {
-    if (rank < 0) return 'APPROVE';
-    if (authorRelationship == 'insider' && rank == severities.indexOf('nit')) {
-      return 'APPROVE';
-    }
+    if (rank <= severities.indexOf('nit')) return 'APPROVE';
     if (majorCount >= 4) return 'REQUEST_CHANGES';
     return 'COMMENT';
   }
@@ -885,7 +882,6 @@ String reviewVerdict({
   if (passIndex >= 3 && majorCount >= 5) {
     return 'REQUEST_CHANGES';
   }
-  if (authorRelationship == 'external' && rank >= 0) return 'COMMENT';
   return 'APPROVE';
 }
 

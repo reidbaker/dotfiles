@@ -10,8 +10,7 @@ reviewer and propose up to **2 candidate comments** (`candidate_1` and optional
 
 ## Inputs
 
-- PR header and description at review time: `{{PASS_INPUT}}` (note the author
-  and `author_relationship`: `agent`, `insider`, or `external`).
+- PR header and description at review time: `{{PASS_INPUT}}`.
 - Neutral locus pointer: `{{LOCUS}}` (`path`, `line`, `line_range`, `lens`,
   `what_is_here`, and optional `prior_thread`).
 - The hunk(s) for this file with ±50 numbered lines of context: `{{HUNK_CONTEXT}}`.
@@ -56,16 +55,20 @@ actually writes on this file domain:
    - Does a failure message tell a human/agent to do manual work instead of
      linking the docs or triggering a tool?
 6. **Follow-up Pass Threads (`prior_thread`):**
-   - If the author's reply explains non-obvious behavior (like why `--release-version ''`
-     means dry run), ask them to add a short inline code comment with that
-     explanation rather than just saying `"ok that logic makes sense"`.
-   - If the new commit creates a duplicate workflow or partial workaround instead
-     of addressing your earlier architectural comment, push back directly.
+   - Apply the persona's follow-up rules. In particular, if the author's reply
+     explains non-obvious behavior (like why `--release-version ''` means dry
+     run), ask them to add a short inline code comment with that explanation
+     rather than only accepting the reply.
+   - If the new commit adds a special case or a duplicate workflow instead of
+     addressing your earlier design comment, say so and ask for a
+     restructure.
 
-### Pass B — Voice Calibration & Multi-Candidate Generation
+### Pass B — Voice & Multi-Candidate Generation
 - Follow the persona's voice, phrasing, and word-count target in `{{PERSONA_PROMPT}}`.
-- **When `author_relationship` is `agent`:** Use blunt, direct supervisor mode
-  (1–2 plain sentences). Do **not** pad with politeness hedges.
+- **One tone for every author.** Never change tone based on whether the
+  author looks like a person or an agent. Accounts are often shared, and any
+  comment may be read as if the persona's human wrote it to a person. Use the
+  persona's polite tone and soften the wording, never the issue.
 - **Low Abstention Threshold:** Only return `"candidates": []` when the hunk
   is pure mechanical boilerplate with zero plausible persona move. If you see
   both a structural/correctness question and a local craft/idiom/doc/test point

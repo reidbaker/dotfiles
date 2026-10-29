@@ -89,12 +89,7 @@ final class _RankCommand extends Command<int> {
       ..addOption('in', mandatory: true, help: 'Critic outputs (.jsonl).')
       ..addOption('out', mandatory: true, help: 'Review JSON to write.')
       ..addOption('k', help: 'Comment cap. Defaults to the persona budget.')
-      ..addOption('pass-index', defaultsTo: '1')
-      ..addOption(
-        'author-relationship',
-        defaultsTo: 'insider',
-        allowed: const ['insider', 'external', 'agent', 'self'],
-      );
+      ..addOption('pass-index', defaultsTo: '1');
   }
 
   @override
@@ -115,7 +110,6 @@ final class _RankCommand extends Command<int> {
       k: k,
       personSlug: persona.slug,
       passIndex: int.parse(a['pass-index'] as String),
-      authorRelationship: a['author-relationship'] as String,
     );
     final file = File(a['out'] as String)..parent.createSync(recursive: true);
     file.writeAsStringSync(

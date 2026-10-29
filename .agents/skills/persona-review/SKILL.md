@@ -76,10 +76,9 @@ dart run bin/review_pipeline.dart rank \
   --person <reid|stuart|lasse|jake|david|codefu|loic|chris|paul> \
   --in <scratch_dir>/pipeline/critic_outputs.jsonl \
   --out <scratch_dir>/pipeline/ranked_review.json \
-  --pass-index <1|2|3> \
-  --author-relationship <agent|insider|external>
+  --pass-index <1|2|3>
 ```
-- **What Stage 3 does:** Merges same-file duplicates on the same identifier, collapses cross-file pattern repeats into `"Same here."`, caps output at `K` comments (`K=5` default, `K=8` for Lasse), and **reserves 1–2 dedicated slots on distinct files for high-signal `minor`/`nit` signature craft catches** so major structural questions never crowd out craft and maintainability checks.
+- **What Stage 3 does:** Merges same-file duplicates on the same identifier, collapses cross-file pattern repeats into `"Same here."`, caps output at `K` comments (`K=5` default, `K=8` for Lasse), and **reserves 1–2 dedicated slots on distinct files for high-signal `minor`/`nit` signature craft catches** so major structural questions never crowd out craft and maintainability checks. The verdict depends only on the pass and the severities, never on who authored the PR.
 
 ---
 
@@ -98,3 +97,15 @@ In addition to per-locus / per-file critics, run **one whole-PR architecture & d
   - Run Stage 1/2 persona critics on **Argon (`gemini-launch-candidate-low`)** or `inherit` (or `opus-5.5-low` when explicitly requested and quota is healthy).
   - **Never use `flash` models (`gemini-*-flash*`) for code or design review** (`36%` harmful rate and `80%` silent approvals in `v5` evals).
 - **Weigh findings on their merits:** Verify citations against the actual tree before acting on or reporting any finding. Drop findings that contradict repository conventions (such as configured `page_width` in `analysis_options.yaml` or explicit user instructions).
+
+---
+
+## 5. One Tone, and Never Speak as the Human
+
+- **Never switch tone on who authored the PR.** People often share one GitHub account with their agents, so "agent PR" vs. "human PR" can't be detected reliably. Every persona uses its polite, human-facing tone on every PR. Soften the wording, never the issue.
+- **Score issues, not tone.** When you evaluate a persona, count a comment as a match if it raises the same issue as the real reviewer, even if it is phrased more softly.
+- **Never post persona output as the human.** Persona comments go to the mayor or the worker as drafts. Never post them from the human's account, and label any persona review that is shared as an agent persona review (see the worker brief).
+
+## 6. Author Briefs (Before Code Is Written)
+
+Some reviewers have an author brief in `references/author-briefs/`, for example [`reid.md`](references/author-briefs/reid.md). It lists the issues that reviewer most often asks agents to fix after the fact. When a worker writes code that this reviewer will review, paste the brief into the worker's prompt together with the worker brief, so the issues are prevented on the first pass instead of found in review.

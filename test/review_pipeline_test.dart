@@ -139,18 +139,17 @@ deleted file mode 100644
       expect(r.toJson()['uncapped'], hasLength(8));
     });
 
-    test('reviewVerdict follows pass, relationship and severity', () {
-      String v(int pass, String? sev, [String rel = 'agent']) => reviewVerdict(
-        passIndex: pass,
-        authorRelationship: rel,
-        maxSeverity: sev,
-      );
+    test('reviewVerdict follows pass and severity only', () {
+      String v(int pass, String? sev) =>
+          reviewVerdict(passIndex: pass, maxSeverity: sev);
+      expect(v(1, null), 'APPROVE');
+      expect(v(1, 'nit'), 'APPROVE');
+      expect(v(1, 'minor'), 'COMMENT');
       expect(v(1, 'major'), 'COMMENT');
       expect(v(1, 'blocking'), 'REQUEST_CHANGES');
       expect(v(2, 'major'), 'REQUEST_CHANGES');
-      expect(v(4, 'minor'), 'APPROVE');
+      expect(v(3, 'minor'), 'APPROVE');
       expect(v(4, null), 'APPROVE');
-      expect(v(3, 'minor', 'external'), 'COMMENT');
     });
 
     test('sanitizeLocusForStage2 strips prescriptive why field', () {

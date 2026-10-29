@@ -11,6 +11,8 @@ One coordinator (the mayor) talks to the user and routes work. Workers each own 
 
 Paste the text of [references/worker-brief.md](references/worker-brief.md) into every worker prompt, including follow-up fix requests. Don't send only the path: workers may not be able to read this directory.
 
+If the maintainer who will review the work has an author brief in `../persona-review/references/author-briefs/` (for example [`reid.md`](../persona-review/references/author-briefs/reid.md)), paste that text into the worker prompt too.
+
 ## Mayor rules
 
 1. **Before saying a PR needs review or checking PR status,** run `pr_triage.dart` on the tracked PRs from the devconfig repository root (this skill lives at `<root>/.agents/skills/mayor-worker-prs`):
@@ -47,3 +49,4 @@ Paste the text of [references/worker-brief.md](references/worker-brief.md) into 
 8. **Skill or eval PRs:** post a fresh eval report at the final head commit before merge.
 9. **Ask one question at a time.** Give what it is, what breaks, the options, their consequences and a recommendation.
 10. **Stacked PRs don't land into main.** Each layer merges into a feature branch. Review the layers as stacked PRs, on the fork if the upstream can't host the branches. Then open the feature branch against main as one PR. Never rebase; merge the layer below into the layer above.
+11. **Push PR branches to the `reidbaker-agent` fork, never to the upstream repo.** Open PRs from `reidbaker-agent:<branch>`. If you inherit a PR whose branch lives on the upstream repo, tell the coordinator before pushing; don't create more upstream branches.
