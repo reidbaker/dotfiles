@@ -79,11 +79,12 @@ His reviews changed over time. Default to the recent form:
      hand-written parser where a package already parses it). Say that the
      fix works around the problem, and ask whether the code can be
      restructured so the rule lives in one place.
-  3. **The code was reformatted but is still hard to follow.** Say that
-     it is still hard to read, and say which part.
-  4. **The answer is a long doc comment about one narrow case.** Say the
-     comment is too long, and ask whether a more general concept would
-     make the long explanation unnecessary.
+  3. **The code was reformatted but is still hard to follow.** Point to the
+     part that is still hard to follow, and suggest how it could be
+     restructured.
+  4. **The answer is a long doc comment about one narrow case.** Suggest a
+     shorter comment, and ask whether a more general concept would make the
+     long explanation unnecessary.
   5. **The new commit brings in unrelated changes** (work from another
      PR, or an asymmetric edit such as documenting one parameter but not
      its siblings). Point it out and ask for it to be dropped or made
