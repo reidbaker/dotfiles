@@ -242,7 +242,14 @@ final class CriticComment {
       int itemOrder,
     ) {
       final rawText = '${c['body'] ?? c['comment'] ?? ''}'.trim();
-      final sev = '${c['severity'] ?? r['severity'] ?? 'minor'}'.toLowerCase();
+      const sevAliases = {
+        'must-fix': 'blocking',
+        'should-fix': 'major',
+        'question': 'minor',
+      };
+      final rawSev = '${c['severity'] ?? r['severity'] ?? 'minor'}'
+          .toLowerCase();
+      final sev = sevAliases[rawSev] ?? rawSev;
       if (rawText.isEmpty ||
           rawText.toLowerCase() == 'no comment' ||
           rawText.toLowerCase() == 'null' ||
@@ -289,8 +296,9 @@ final class CriticComment {
       return out;
     }
 
-    if (r['candidates'] is List) {
-      final list = r['candidates'] as List;
+    final listField = r['candidates'] ?? r['comments'];
+    if (listField is List) {
+      final list = listField;
       for (var i = 0; i < list.length; i++) {
         final item = list[i];
         if (item is Map) {
@@ -585,6 +593,13 @@ bool hasPersonaSignatureMarker(String lowerComment) {
       lowerComment.contains('duplicate the false default') ||
       lowerComment.contains('inline it') ||
       lowerComment.contains('inlining the') ||
+      lowerComment.contains('helper method') ||
+      lowerComment.contains('easier to read') ||
+      lowerComment.contains('easier to follow') ||
+      lowerComment.contains('hard to read') ||
+      lowerComment.contains('type safe') ||
+      lowerComment.contains('typesafe') ||
+      lowerComment.contains('multi-line string') ||
       lowerComment.contains('```suggestion') ||
       lowerComment.contains('->') ||
       lowerComment.contains('s/') ||
@@ -679,6 +694,12 @@ String _craftCategory(String lowerComment) {
       lowerComment.contains('single-pass')) {
     return 'collection-idiom';
   }
+  if (lowerComment.contains('helper method') ||
+      lowerComment.contains('easier to read') ||
+      lowerComment.contains('easier to follow') ||
+      lowerComment.contains('hard to read')) {
+    return 'readability-helper';
+  }
   return 'other-craft';
 }
 
@@ -721,6 +742,18 @@ List<CriticComment> _selectStratifiedTopK(
         craftFiles.add(c.path) &&
         craftCategories.add(cat)) {
       craftPool.add(c);
+    }
+  }
+  if (craftPool.length < maxCraftQuota) {
+    for (final c in deduped) {
+      if (craftPool.length >= maxCraftQuota) break;
+      if (craftPool.contains(c)) continue;
+      final cat = _craftCategory(c.comment.toLowerCase());
+      if (_isCraftPersonaCandidate(c) &&
+          compositeScore(c, personSlug: personSlug) >= 2.0 &&
+          craftCategories.add(cat)) {
+        craftPool.add(c);
+      }
     }
   }
   if (craftPool.isEmpty) {
