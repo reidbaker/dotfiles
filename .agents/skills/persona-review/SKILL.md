@@ -85,18 +85,32 @@ dart run bin/review_pipeline.dart rank \
 
 ---
 
-## 3. Whole-PR Architecture & Duplication Pass (`arch_stuart`)
+## 3. Whole-PR Architecture & Duplication Pass (Pair-Routed by Domain)
 
-In addition to per-locus / per-file critics, run **one whole-PR architecture & duplication pass (`arch_stuart`)** per PR using [`references/personas/stuart.md`](references/personas/stuart.md) with the full PR diff and a searchable checkout of the repository:
+Because the 3-stage pipeline slices a PR into isolated hunks, run **one whole-PR architecture, duplication & cross-file parity pass** per PR with the **full PR diff** and a **searchable checkout of the repository** (`rg`/`grep`).
 
-> *"This pass is NOT a line-by-line review: other reviewers cover each changed file on its own. Look only for problems that need more than one file to see: (1) new code that duplicates existing code in the repository (search with grep/rg for similar functions, regexes, parsers, helpers, constants and test setup), or that should reuse an existing helper, model, or a well-known Dart package or tool; (2) code, classes or tests placed in the wrong file or layer, or a new file where an existing one should be extended; (3) other places in the repository (docs, examples, skills, README, RULES.md, tests, config) that should change with this PR but did not; (4) interactions with existing features, rules, options or configuration that the PR does not handle; (5) boundary & single-source-of-truth leaks across files: raw `Map<String, dynamic>`, untyped `Object?` option bags, boolean origin flags (`isFromFile`), or 3+ positional `String` parameters passed across internal layers instead of typed domain records/classes, or default parameter values/constants duplicated between a registry/caller and a rule class. For each finding, cite the existing code as evidence (`path:line` in the repo, or the package/tool name)."*
+### Step A: Route the Whole-PR Pass to the Domain's Architectural Pair
+Pick the primary architectural lead (or run both when a PR spans two domains) based on what the PR touches:
+
+| PR / Repository Domain | Whole-PR Pass Persona Pair | Primary Cross-File Focus |
+| :--- | :--- | :--- |
+| **CLI, Tooling, Dart Packages, CI Workflows & Android (`*.dart`, `.github/workflows/**`, `*.gradle*`)** | **Reid** ([`references/personas/reid.md`](references/personas/reid.md)) + **Stuart** ([`references/personas/stuart.md`](references/personas/stuart.md)) | Duplicate parsers/helpers/constants across files, single source of truth for defaults, wrong file/layer placement, unnecessary new files, and missing companion doc/test/workflow updates. |
+| **`packages/flutter_tools/**`, Xcode, CocoaPods & SwiftPM** | **Jenn** ([`references/personas/jenn.md`](references/personas/jenn.md)) + **Flutter Tools Ghost** ([`references/personas/flutter-tools-ghost.md`](references/personas/flutter-tools-ghost.md)) | iOS/macOS cross-file parity (`build_ios.dart` + `build_macos.dart`, `Podfile`, `Info.plist`, `xcscheme`), oversized PR splitting along natural boundaries, and `Target` inputs/outputs caching contracts across build targets. |
+| **Plugins, Federated Packages, Docs & Skills (`flutter/packages`, `*.md`, `SKILL.md`, `CHANGELOG.md`)** | **Stuart** ([`references/personas/stuart.md`](references/personas/stuart.md)) + **Reid** ([`references/personas/reid.md`](references/personas/reid.md)) | Federated plugin boundary leaks, Chesterton's fence on removed behavior/instructions, `CHANGELOG.md`/`pubspec.yaml`/README sync, and cross-package duplication. |
+| **C/C++ Engine, Windows & Darwin Embedder (`*.cc`, `*.h`, `*.mm`, `*.swift`, `BUILD.gn`)** | **Chris** ([`references/personas/chris.md`](references/personas/chris.md)) + **Loïc** ([`references/personas/loic.md`](references/personas/loic.md)) | C embedder ABI (`struct_size`) across headers/callers, platform vs. raster thread ownership across translation units, and Darwin/Windows embedder parity. |
+| **Analyzer, CFE, Build & Codegen (`pkg/analyzer/**`, `pkg/_fe_analyzer_shared/**`, `build_runner`)** | **Paul** ([`references/personas/paul.md`](references/personas/paul.md)) + **Jake** ([`references/personas/jake.md`](references/personas/jake.md)) | Shared Analyzer/CFE parity (`_fe_analyzer_shared`), unhandled AST/`Element2` visitor variants across passes, and `pubspec.yaml`/`build.yaml` workspace boundaries. |
+
+### Step B: Whole-PR Task Brief
+Give the routed whole-PR persona(s) the full diff, repo checkout, and this brief:
+
+> *"This pass is NOT a line-by-line review: other reviewers cover each changed file on its own. Look only for problems that need more than one file to see: (1) new code that duplicates existing code in the repository (search with grep/rg for similar functions, regexes, parsers, helpers, constants and test setup), or that should reuse an existing helper, model, or a well-known Dart package or tool; (2) code, classes or tests placed in the wrong file or layer, or a new file where an existing one should be extended; (3) other places in the repository (companion platform files such as `build_macos.dart` when `build_ios.dart` changes, docs, examples, skills, README, RULES.md, CHANGELOG.md, tests, config) that should change with this PR but did not; (4) interactions with existing features, rules, options or configuration that the PR does not handle; (5) boundary & single-source-of-truth leaks across files: raw `Map<String, dynamic>`, untyped `Object?` option bags, boolean origin flags (`isFromFile`), or 3+ positional `String` parameters passed across internal layers instead of typed domain records/classes, or default parameter values/constants duplicated between a registry/caller and a rule class. For each finding, cite the existing code as evidence (`path:line` in the repo, or the package/tool name)."*
 
 ---
 
 ## 4. Model Routing & Falsification Gate
 
 - **Model selection:**
-  - Run `arch_stuart` on **Argon (`gemini-launch-candidate-low`)** (highest precision and highest value per 10 findings in our `v5` benchmark).
+  - Run the **Whole-PR Architecture & Duplication Pass** on **Argon (`gemini-launch-candidate-low`)** (highest precision and highest value per 10 findings in our `v5` benchmark).
   - Run Stage 1/2 persona critics on **Argon (`gemini-launch-candidate-low`)** or `inherit` (or `opus-5.5-low` when explicitly requested and quota is healthy).
   - **Never use `flash` models (`gemini-*-flash*`) for code or design review** (`36%` harmful rate and `80%` silent approvals in `v5` evals).
 - **Weigh findings on their merits:** Verify citations against the actual tree before acting on or reporting any finding. Drop findings that contradict repository conventions (such as configured `page_width` in `analysis_options.yaml` or explicit user instructions). When a finding or the PR says a test enforces a rule, open the test and find the assertion that does it.
