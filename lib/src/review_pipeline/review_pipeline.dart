@@ -14,7 +14,9 @@ enum ReviewPersona {
   codefu('codefu', 'john-mcdole', 5),
   loic('loic', 'loic-sharma', 5),
   chris('chris', 'chris-bracken', 5),
-  paul('paul', 'paul-berry', 5);
+  paul('paul', 'paul-berry', 5),
+  jenn('jenn', 'jenn-magder', 5),
+  flutterToolsGhost('flutter-tools-ghost', 'flutter-tools-ghost', 6);
 
   const ReviewPersona(this.shortName, this.slug, this.defaultCap);
 
@@ -24,6 +26,10 @@ enum ReviewPersona {
 
   static ReviewPersona parse(String input) {
     final normalized = input.trim().toLowerCase();
+    if (normalized == 'jmagman') return ReviewPersona.jenn;
+    if (normalized == 'tools' || normalized == 'flutter_tools') {
+      return ReviewPersona.flutterToolsGhost;
+    }
     for (final persona in values) {
       if (persona.shortName == normalized || persona.slug == normalized) {
         return persona;
@@ -493,6 +499,110 @@ double personaTypeWeight(
   final t = effectiveType.toLowerCase();
   final lower = comment.toLowerCase();
 
+  if (personSlug == 'jenn-magder') {
+    var weight = 0.30;
+    if (t.contains('ios-macos') ||
+        t.contains('xcode') ||
+        t.contains('cocoapods') ||
+        t.contains('objc') ||
+        lower.contains('build_macos.dart') ||
+        lower.contains('only migrates ios') ||
+        lower.contains('also want to add it here for macos') ||
+        lower.contains('podfile') ||
+        lower.contains('use_frameworks!') ||
+        lower.contains('use_modular_headers!') ||
+        lower.contains('xcscheme') ||
+        lower.contains('info.plist') ||
+        lower.contains('xcdevice') ||
+        lower.contains('gesturerecognizer')) {
+      weight = 0.75;
+    } else if (t.contains('concrete-suggestion') ||
+        t.contains('suggestion') ||
+        comment.contains('```suggestion')) {
+      weight = 0.72;
+    } else if (t.contains('docs-comments') ||
+        lower.contains('link back to an issue') ||
+        lower.contains('link back to a') ||
+        lower.contains('working around') ||
+        lower.contains('explaining the bug') ||
+        lower.contains('apple.com/xcode')) {
+      weight = 0.68;
+    } else if (t.contains('flutter-tools') ||
+        t.contains('architecture') ||
+        t.contains('api-contract') ||
+        t.contains('api-naming') ||
+        lower.contains('enhanced enum') ||
+        lower.contains('unawaited') ||
+        lower.contains('aliases') ||
+        lower.contains('dry out')) {
+      weight = 0.62;
+    } else if (t.contains('tests-verification') ||
+        t.contains('test-assertion') ||
+        t.contains('simplify') ||
+        lower.contains('testwithoutcontext') ||
+        lower.contains('unused import')) {
+      weight = 0.58;
+    } else if (t.contains('scope') ||
+        lower.contains('break it into') ||
+        lower.contains('split')) {
+      weight = 0.55;
+    } else if (t == 'bug' || t.contains('bug-lifecycle')) {
+      weight = 0.25;
+    }
+    return weight;
+  }
+
+  if (personSlug == 'flutter-tools-ghost') {
+    var weight = 0.30;
+    if (t.contains('di-globals') ||
+        t.contains('hermetic') ||
+        lower.contains('globals.') ||
+        lower.contains('testwithoutcontext') ||
+        lower.contains('bufferlogger') ||
+        lower.contains('fakeprocessmanager') ||
+        lower.contains('memoryfilesystem')) {
+      weight = 0.78;
+    } else if (t.contains('build-system') ||
+        lower.contains('releaseunpackmacos') ||
+        lower.contains('unpackmacos') ||
+        lower.contains('target') && lower.contains('outputs') ||
+        lower.contains('caching fail') ||
+        lower.contains('source.artifact')) {
+      weight = 0.75;
+    } else if (t.contains('cli-ux') ||
+        t.contains('toolexit') ||
+        lower.contains('throwtoolexit') ||
+        lower.contains('toolexit') ||
+        lower.contains('stateerror') ||
+        lower.contains('printtrace') ||
+        lower.contains('top-level') && lower.contains('option')) {
+      weight = 0.70;
+    } else if (t.contains('ios-macos') ||
+        t.contains('cocoapods') ||
+        t.contains('swiftpm') ||
+        lower.contains('swift package manager') ||
+        lower.contains('vendored_frameworks') ||
+        lower.contains('podspec') ||
+        lower.contains('info.plist')) {
+      weight = 0.68;
+    } else if (t.contains('process-io') ||
+        t.contains('correctness') ||
+        lower.contains('errorhandlingfilesystem') ||
+        lower.contains('getbuilddirectory') ||
+        lower.contains('dart:io') ||
+        lower.contains('base/io.dart')) {
+      weight = 0.64;
+    } else if (t.contains('concrete-suggestion') ||
+        t.contains('docs-comments') ||
+        t.contains('simplify') ||
+        comment.contains('```suggestion')) {
+      weight = 0.58;
+    } else if (t == 'bug' || t.contains('bug-lifecycle')) {
+      weight = 0.25;
+    }
+    return weight;
+  }
+
   var weight = 0.25;
   if (t.contains('scope') ||
       lower.contains('landed in pr') ||
@@ -533,23 +643,26 @@ double personaTypeWeight(
 
 /// Bonus for persona-aligned rhetorical moves and penalty for generic AI
 /// defensive-programming essays.
-double personaMoveAdjustment(String comment) {
+double personaMoveAdjustment(
+  String comment, {
+  String personSlug = 'reid-baker',
+}) {
   final trimmed = comment.trim();
   final lower = trimmed.toLowerCase();
   final wordCount = trimmed.split(RegExp(r'\s+')).length;
   var adj = 0.0;
 
   if (trimmed.contains('```suggestion') || trimmed.contains('```dart')) {
-    adj += 0.25;
+    adj += personSlug == 'jenn-magder' ? 0.38 : 0.25;
   }
   if (trimmed.contains('?') && wordCount <= 35) adj += 0.20;
   if (RegExp(
-    r'^(why|should|do we|is there|can we|can this|does this|what happens|too many|too long|this change was landed|here and below|nitpick:)',
+    r'^(why|should|do we|is there|can we|can this|can you|does this|what happens|too many|too long|this change was landed|here and below|nitpick:|nit:|i know you|how about|did you mean)',
     caseSensitive: false,
   ).hasMatch(trimmed)) {
     adj += 0.20;
   }
-  if (hasPersonaSignatureMarker(lower)) {
+  if (hasPersonaSignatureMarker(lower, personSlug: personSlug)) {
     adj += 0.65;
   }
   if (lower.contains('landed in pr') ||
@@ -558,17 +671,24 @@ double personaMoveAdjustment(String comment) {
     adj += 0.35;
   }
 
-  if (wordCount >= 5 && wordCount <= 32) {
+  if (wordCount >= 3 && wordCount <= 32) {
     adj += 0.20;
   } else if (wordCount > 65) {
     adj -= 0.45;
   }
 
   if (RegExp(
-    r'network blip|rate limit|if `gh release view` fails|malformed input|race condition',
+    r'network blip|rate limit|if `gh release view` fails|malformed input|race condition|\bfwiw\b|\bimho\b|\bmy gut says\b',
     caseSensitive: false,
   ).hasMatch(trimmed)) {
     adj -= 0.55;
+  }
+  if ((personSlug == 'jenn-magder' || personSlug == 'flutter-tools-ghost') &&
+      RegExp(
+        r'\bnon-?blocking\b|\bimo\b',
+        caseSensitive: false,
+      ).hasMatch(trimmed)) {
+    adj -= 0.40;
   }
 
   return adj;
@@ -577,7 +697,67 @@ double personaMoveAdjustment(String comment) {
 /// Whether [lowerComment] exhibits a concrete persona craft/readability,
 /// naming, collection-idiom, or test-clarity marker (typically emitted by
 /// Stage 2 as `minor` or `nit`).
-bool hasPersonaSignatureMarker(String lowerComment) {
+bool hasPersonaSignatureMarker(
+  String lowerComment, {
+  String personSlug = 'reid-baker',
+}) {
+  if (personSlug == 'jenn-magder') {
+    return lowerComment.contains('build_macos.dart') ||
+        lowerComment.contains('only migrates ios') ||
+        lowerComment.contains('also want to add it here for macos') ||
+        lowerComment.contains('info.plist') ||
+        lowerComment.contains('xcscheme') ||
+        lowerComment.contains('podfile') ||
+        lowerComment.contains('use_frameworks!') ||
+        lowerComment.contains('use_modular_headers!') ||
+        lowerComment.contains('gesturerecognizer') ||
+        lowerComment.contains('respondstoselector') ||
+        lowerComment.contains('synthesized property') ||
+        lowerComment.contains('backing ivar') ||
+        lowerComment.contains('link back to an issue') ||
+        lowerComment.contains('link back to a') ||
+        lowerComment.contains('working around') ||
+        lowerComment.contains('explaining the bug') ||
+        lowerComment.contains('unused import') ||
+        lowerComment.contains('enhanced enum') ||
+        lowerComment.contains('unawaited') ||
+        lowerComment.contains('testwithoutcontext') ||
+        lowerComment.contains('i know you') ||
+        lowerComment.contains('directoryfrompath') ||
+        lowerComment.contains('codesign') && lowerComment.contains('target') ||
+        lowerComment.contains('help.apple.com/xcode') ||
+        lowerComment.contains('aliases') &&
+            lowerComment.contains('screenshot') ||
+        lowerComment.contains('--vm-service-url') ||
+        lowerComment.contains('takescreenshot') ||
+        lowerComment.contains('```suggestion');
+  }
+  if (personSlug == 'flutter-tools-ghost') {
+    return lowerComment.contains('globals.') ||
+        lowerComment.contains('context globals') ||
+        lowerComment.contains('testwithoutcontext') ||
+        lowerComment.contains('bufferlogger') ||
+        lowerComment.contains('fakeprocessmanager') ||
+        lowerComment.contains('memoryfilesystem') ||
+        lowerComment.contains('throwtoolexit') ||
+        lowerComment.contains('toolexit') &&
+            lowerComment.contains('stateerror') ||
+        lowerComment.contains('errorhandlingfilesystem') ||
+        lowerComment.contains('getbuilddirectory') ||
+        lowerComment.contains('base/io.dart') ||
+        lowerComment.contains('releaseunpackmacos') ||
+        lowerComment.contains('unpackmacos') ||
+        lowerComment.contains('_gethostartifactpath') ||
+        lowerComment.contains('fluttermacosframeworkdsym') ||
+        lowerComment.contains('printtrace') ||
+        lowerComment.contains('unused import') ||
+        lowerComment.contains('swift package manager') ||
+        lowerComment.contains('swiftpm') ||
+        lowerComment.contains('vendored_frameworks') ||
+        lowerComment.contains('copyvendoredframeworks') ||
+        lowerComment.contains('dartdevc-module-format') ||
+        lowerComment.contains('```suggestion');
+  }
   if (lowerComment.contains('pronoun') ||
       lowerComment.contains('two-space') ||
       lowerComment.contains('two spaces') ||
@@ -649,7 +829,7 @@ double _severityBaseScore(String severity) => switch (severity) {
 double compositeScore(CriticComment c, {String personSlug = 'reid-baker'}) {
   final base = _severityBaseScore(c.severity);
   final typeW = personaTypeWeight(personSlug, c.effectiveType, c.comment);
-  final moveAdj = personaMoveAdjustment(c.comment);
+  final moveAdj = personaMoveAdjustment(c.comment, personSlug: personSlug);
   final confAdj = (c.confidence - 0.75) * 0.3;
   final candAdj = c.candidateIndex == 1 ? 0.08 : 0.0;
   return base + (typeW + moveAdj + confAdj + candAdj).clamp(-0.85, 1.45);
@@ -657,7 +837,69 @@ double compositeScore(CriticComment c, {String personSlug = 'reid-baker'}) {
 
 /// Craft category for stratified slot diversity so two pronoun comments do not
 /// crowd out a constant-inlining, rewrite, or test-comment catch.
-String _craftCategory(String lowerComment) {
+String _craftCategory(String lowerComment, {String personSlug = 'reid-baker'}) {
+  if (personSlug == 'jenn-magder') {
+    if (lowerComment.contains('build_macos') ||
+        lowerComment.contains('only migrates ios') ||
+        lowerComment.contains('for macos')) {
+      return 'ios-macos-parity';
+    }
+    if (lowerComment.contains('link back to') ||
+        lowerComment.contains('working around') ||
+        lowerComment.contains('explaining the bug')) {
+      return 'workaround-issue-link';
+    }
+    if (lowerComment.contains('gesturerecognizer') ||
+        lowerComment.contains('synthesized property') ||
+        lowerComment.contains('backing ivar')) {
+      return 'objc-idiom';
+    }
+    if (lowerComment.contains('info.plist') ||
+        lowerComment.contains('xcscheme') ||
+        lowerComment.contains('podfile')) {
+      return 'xcode-plist-podfile';
+    }
+    if (lowerComment.contains('unused import')) return 'unused-import';
+    if (lowerComment.contains('enhanced enum') ||
+        lowerComment.contains('unawaited')) {
+      return 'dart-idiom';
+    }
+    if (lowerComment.contains('```suggestion')) return 'suggestion-block';
+    return 'other-jenn-craft';
+  }
+  if (personSlug == 'flutter-tools-ghost') {
+    if (lowerComment.contains('globals.') ||
+        lowerComment.contains('context globals')) {
+      return 'di-globals';
+    }
+    if (lowerComment.contains('testwithoutcontext') ||
+        lowerComment.contains('bufferlogger') ||
+        lowerComment.contains('fakeprocessmanager') ||
+        lowerComment.contains('memoryfilesystem')) {
+      return 'hermetic-test-fakes';
+    }
+    if (lowerComment.contains('throwtoolexit') ||
+        lowerComment.contains('toolexit') ||
+        lowerComment.contains('stateerror')) {
+      return 'toolexit-error';
+    }
+    if (lowerComment.contains('releaseunpackmacos') ||
+        lowerComment.contains('unpackmacos') ||
+        lowerComment.contains('source.artifact')) {
+      return 'build-system-target';
+    }
+    if (lowerComment.contains('printtrace') ||
+        lowerComment.contains('info.plist')) {
+      return 'trace-plist';
+    }
+    if (lowerComment.contains('unused import')) return 'unused-import';
+    if (lowerComment.contains('vendored_frameworks') ||
+        lowerComment.contains('swift package manager') ||
+        lowerComment.contains('copyvendoredframeworks')) {
+      return 'darwin-frameworks';
+    }
+    return 'other-tools-craft';
+  }
   if (lowerComment.contains('pronoun')) return 'pronoun';
   if (lowerComment.contains('two-space') ||
       lowerComment.contains('two spaces') ||
@@ -706,11 +948,14 @@ String _craftCategory(String lowerComment) {
 /// Whether [c] belongs to the persona craft/readability/test-clarity stratum
 /// (`minor` or `nit` comment with a concrete signature marker or
 /// readability/test-assertion lens).
-bool _isCraftPersonaCandidate(CriticComment c) {
+bool _isCraftPersonaCandidate(
+  CriticComment c, {
+  String personSlug = 'reid-baker',
+}) {
   if (c.comment == 'Same here.') return false;
   if (c.severityRank >= severities.indexOf('major')) return false;
   final lower = c.comment.toLowerCase();
-  return hasPersonaSignatureMarker(lower) ||
+  return hasPersonaSignatureMarker(lower, personSlug: personSlug) ||
       c.effectiveType == 'api-naming-ergonomics' ||
       c.effectiveType == 'test-assertion-fidelity';
 }
@@ -736,8 +981,8 @@ List<CriticComment> _selectStratifiedTopK(
   final craftFiles = <String>{};
   final craftCategories = <String>{};
   for (final c in deduped) {
-    final cat = _craftCategory(c.comment.toLowerCase());
-    if (_isCraftPersonaCandidate(c) &&
+    final cat = _craftCategory(c.comment.toLowerCase(), personSlug: personSlug);
+    if (_isCraftPersonaCandidate(c, personSlug: personSlug) &&
         compositeScore(c, personSlug: personSlug) >= 2.0 &&
         craftFiles.add(c.path) &&
         craftCategories.add(cat)) {
@@ -748,8 +993,11 @@ List<CriticComment> _selectStratifiedTopK(
     for (final c in deduped) {
       if (craftPool.length >= maxCraftQuota) break;
       if (craftPool.contains(c)) continue;
-      final cat = _craftCategory(c.comment.toLowerCase());
-      if (_isCraftPersonaCandidate(c) &&
+      final cat = _craftCategory(
+        c.comment.toLowerCase(),
+        personSlug: personSlug,
+      );
+      if (_isCraftPersonaCandidate(c, personSlug: personSlug) &&
           compositeScore(c, personSlug: personSlug) >= 2.0 &&
           craftCategories.add(cat)) {
         craftPool.add(c);

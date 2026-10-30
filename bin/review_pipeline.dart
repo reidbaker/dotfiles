@@ -84,7 +84,7 @@ final class _RankCommand extends Command<int> {
         mandatory: true,
         help:
             'Persona name or slug (reid, stuart, lasse, jake, david, codefu, '
-            'loic, chris, paul).',
+            'loic, chris, paul, jenn, flutter-tools-ghost).',
       )
       ..addOption('in', mandatory: true, help: 'Critic outputs (.jsonl).')
       ..addOption('out', mandatory: true, help: 'Review JSON to write.')

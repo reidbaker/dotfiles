@@ -70,7 +70,17 @@ deleted file mode 100644
       expect(ReviewPersona.parse('lasse-nielsen'), ReviewPersona.lasse);
       expect(ReviewPersona.parse('codefu'), ReviewPersona.codefu);
       expect(ReviewPersona.parse('john-mcdole'), ReviewPersona.codefu);
+      expect(ReviewPersona.parse('jenn'), ReviewPersona.jenn);
+      expect(ReviewPersona.parse('jenn-magder'), ReviewPersona.jenn);
+      expect(ReviewPersona.parse('jmagman'), ReviewPersona.jenn);
+      expect(
+        ReviewPersona.parse('flutter-tools-ghost'),
+        ReviewPersona.flutterToolsGhost,
+      );
+      expect(ReviewPersona.parse('tools'), ReviewPersona.flutterToolsGhost);
       expect(ReviewPersona.parse('chris').defaultCap, 5);
+      expect(ReviewPersona.parse('jenn').defaultCap, 5);
+      expect(ReviewPersona.parse('flutter-tools-ghost').defaultCap, 6);
       expect(ReviewPersona.parse('lasse').defaultCap, 8);
     });
 

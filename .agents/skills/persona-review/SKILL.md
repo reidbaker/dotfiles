@@ -5,7 +5,8 @@ description: >-
   implementation PRs using the 3-stage pipeline (Locus Detector -> Focused
   Persona Critic -> Stratified Ranker) plus a whole-PR architecture/duplication
   pass. Use when reviewing design docs, plans, or pull requests with engineering
-  personas (Reid, Stuart, Lasse, Jake, David, Codefu, Loic, Chris, Paul).
+  personas (Reid, Stuart, Lasse, Jake, David, Codefu, Loic, Chris, Paul, Jenn,
+  Flutter Tools Ghost).
 ---
 
 # Persona Review Skill
@@ -25,6 +26,7 @@ Pair **one Scope & Simplicity Challenger** with **one Formal Invariant & Ergonom
    - **Reid** ([`references/personas/reid.md`](references/personas/reid.md)) — Challenges why a feature, file, or dependency exists at all; enforces a single canonical parser/source of truth; guards SDK/Gradle/AGP compatibility and future-maintainer breadcrumbs.
    - **David** ([`references/personas/david.md`](references/personas/david.md)) — Asks whether a simpler data model or zero-codegen approach already solves the problem; enforces a small, precise set of nouns; unblocks pragmatic incremental shipping with `TODO`s.
    - **Stuart** ([`references/personas/stuart.md`](references/personas/stuart.md)) — Pressure-tests package/plugin boundaries, Chesterton's fence on removed behavior, cross-platform federated plugin contracts, and migration plans.
+   - **Jenn** ([`references/personas/jenn.md`](references/personas/jenn.md)) — Splits oversized PRs along natural boundaries; defines project-specific acronyms/nouns inline at first mention; writes a settled-thread summary conclusion when a doc thread reaches consensus.
 2. **Formal Invariant & Ergonomics Architects (pick 1):**
    - **Jake** ([`references/personas/jake.md`](references/personas/jake.md)) — Audits developer ergonomics, `pubspec.yaml`/`build.yaml` configuration boundaries, build/serialization performance, and macro/codegen contracts.
    - **Paul** ([`references/personas/paul.md`](references/personas/paul.md)) — Stress-tests state transitions, exhaustiveness, type-inference/promotion edge cases, and analyzer/CFE invariants.
@@ -34,11 +36,12 @@ Once the implementation is drafted, route changed files to domain-specific criti
 
 | File Domain | Primary Persona Critics | What They Catch |
 | :--- | :--- | :--- |
+| **`packages/flutter_tools/**` & Flutter CLI** | **Flutter Tools Ghost** ([`references/personas/flutter-tools-ghost.md`](references/personas/flutter-tools-ghost.md)) + **Jenn** ([`references/personas/jenn.md`](references/personas/jenn.md)) | Constructor DI over `globals.*`, `testWithoutContext` + `BufferLogger`/`FakeProcessManager`/`MemoryFileSystem`, `throwToolExit` vs. unhandled exceptions, `Target` inputs/outputs caching invariants, and iOS/macOS parity (`build_ios.dart` + `build_macos.dart`). |
 | **Dart Libraries & Tests (`*.dart`)** | **Lasse** ([`references/personas/lasse.md`](references/personas/lasse.md)) + **`adversarial-review`** (+ **Reid** [`references/personas/reid.md`](references/personas/reid.md) for CLI/tooling/test craft) | Dart language semantics, API contracts, `///` DartDoc precision, single-pass collection/bit-manipulation idioms, and falsification-tested defects. *(Note: Do not run Jake on line-by-line Dart files; keep Jake on Stage A design/ergonomics or `pubspec`/`build.yaml` changes.)* |
 | **CI Workflows, Release Scripts & Infra (`.github/workflows/*.yaml`, `.ci.yaml`, `*.sh`)** | **Codefu** ([`references/personas/codefu.md`](references/personas/codefu.md)) + **Reid** ([`references/personas/reid.md`](references/personas/reid.md)) | Moving multi-line bash into unit-tested Dart, reusable workflow deduplication, release-branch/merge-queue safety, concurrency races, and `start()`/`stop()` resource lifecycle pairing across failure branches. |
 | **Android & Gradle (`*.gradle*`, `*.kt`, `*.java`)** | **Reid** ([`references/personas/reid.md`](references/personas/reid.md)) + **`adversarial-review`** | `minSdk`/`compileSdk`/AGP/Gradle/Kotlin version bounds, Gradle task ordering (`dependsOn`), Robolectric `@Config`, Java `assert` stripping in release builds, and fallback behavior on unknown platform values. |
 | **C/C++ Engine, Windows & Embedder ABI (`*.cc`, `*.cpp`, `*.h`, `CMakeLists.txt`)** | **Loïc** ([`references/personas/loic.md`](references/personas/loic.md)) + **Chris** ([`references/personas/chris.md`](references/personas/chris.md)) | C embedder ABI (`struct_size`), multi-window/multi-view ownership, platform vs. raster thread affinity, `std::move`/UAF hazards, and ready-to-commit ```` ```suggestion ```` blocks. |
-| **iOS/macOS Darwin Embedder & GN (`*.mm`, `*.m`, `*.swift`, `BUILD.gn`, `.gni`)** | **Chris** ([`references/personas/chris.md`](references/personas/chris.md)) + **Stuart** ([`references/personas/stuart.md`](references/personas/stuart.md)) | Objective-C++ ARC / `scoped_nsobject` lifecycles, Swift `@MainActor` vs. release-build `assert` stripping, UIKit/AppKit bounds, CJK/Japanese IME composition, `OCMPartialMock` hygiene, and callback completion on every early return. |
+| **iOS/macOS Darwin Embedder, Xcode, CocoaPods & SwiftPM (`*.mm`, `*.m`, `*.swift`, `Podfile`, `*.pbxproj`, `BUILD.gn`)** | **Chris** ([`references/personas/chris.md`](references/personas/chris.md)) + **Jenn** ([`references/personas/jenn.md`](references/personas/jenn.md)) + **Stuart** ([`references/personas/stuart.md`](references/personas/stuart.md)) | Objective-C++ ARC / `scoped_nsobject` lifecycles, `UIGestureRecognizer` vs. `UIResponder` touch forwarding, `Podfile` `use_frameworks!`/`use_modular_headers!` matrix, `Info.plist`/`xcscheme` parity, Swift `@MainActor` vs. release-build `assert` stripping, and workaround issue-link breadcrumbs. |
 | **Analyzer, CFE & Type System (`pkg/analyzer/**`, `pkg/_fe_analyzer_shared/**`)** | **Paul** ([`references/personas/paul.md`](references/personas/paul.md)) + **Lasse** ([`references/personas/lasse.md`](references/personas/lasse.md)) | Unhandled AST/`Element2` visitor variants, `Type.substitute` null returns, CFE/Analyzer shared parity, and `@Deprecated(message)` + `CHANGELOG.md` completeness. |
 | **Markdown, Docs, Skills & Policy (`*.md`, `SKILL.md`, `CHANGELOG.md`)** | **Stuart** ([`references/personas/stuart.md`](references/personas/stuart.md)) + **Reid** ([`references/personas/reid.md`](references/personas/reid.md)) | Doc-vs-code accuracy, ambiguous pronouns (`it`, `this`), over-long prose, missing remediation links, and `CHANGELOG.md` user-impact clarity. |
 
@@ -73,7 +76,7 @@ For each locus (or per changed file on small PRs), run a subagent with [`referen
 Filter, deduplicate, and rank the Stage 2 candidates using the Stage 3 Stratified Ranker:
 ```bash
 dart run bin/review_pipeline.dart rank \
-  --person <reid|stuart|lasse|jake|david|codefu|loic|chris|paul> \
+  --person <reid|stuart|lasse|jake|david|codefu|loic|chris|paul|jenn|flutter-tools-ghost> \
   --in <scratch_dir>/pipeline/critic_outputs.jsonl \
   --out <scratch_dir>/pipeline/ranked_review.json \
   --pass-index <1|2|3>
