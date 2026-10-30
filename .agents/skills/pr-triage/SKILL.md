@@ -7,9 +7,10 @@ description: Identifies and prioritizes GitHub Pull Requests that need attention
 
 ## Purpose
 Finds open GitHub pull requests across the configured accounts plus incoming
-review requests, sorts them by how urgently they need an action, highlights the
-**Top 3 for My Work** and **Top 3 for Review Queue** in chat, and writes the
-full categorized report to an artifact.
+review requests, sorts them by how urgently they need an action, and presents
+the live prioritized queues directly in chat. Do not write queue state to a file
+or artifact on disk; PR queue state goes stale quickly and must always be
+queried live.
 
 Tier names and action strings below are generated from the enums in
 `lib/src/pr_triage/models/triaged_item.dart`. That file is the source of truth;
@@ -197,24 +198,17 @@ incomplete run announces itself.
   Say so in the report rather than presenting a partial queue as complete.
 * `warnings`: non-fatal problems worth repeating to the user.
 
-### Step 3: Present both Top 3 lists in chat
-* **Do not use tables.**
+### Step 3: Present the live queues in chat
+* **Do not use tables, and do not save `pr_triage_report.md` or queue state to disk.**
 * **Section 1: Top 3 for My Work (Authored PRs)**
   * Numbered Markdown links: `[#123: Title](https://github.com/org/repo/pull/123)`.
   * Include the action prompt verbatim from `action_prompt`.
   * Add the tier and a one-sentence rationale from `reason`.
 * **Section 2: Top 3 for Review Queue (Other People's Work)**
   * Same format. If empty, say *No pending review requests found.*
+* Include additional tiers in chat only when the user asks for the full queue or a specific repo/tier, and note any `warnings` or `truncated: true`.
 
-### Step 4: Write the full report artifact
-Save the breakdown to `pr_triage_report.md` in the conversation artifact
-directory, with:
-* **My Work Queue**: full list grouped by tier.
-* **Review Queue**: full list grouped by tier.
-* **Configuration**: accounts, primary orgs, resolved teammate count,
-  thresholds, and any warnings or truncation.
-
-### Step 5: Offer next actions
+### Step 4: Offer next actions
 * Ready to merge: offer to merge.
 * Blocked on a CI/CD task: offer to apply the trigger label or approve the run.
 * Flaky failure: offer to inspect logs and re-run.
