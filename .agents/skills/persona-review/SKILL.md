@@ -99,7 +99,9 @@ In addition to per-locus / per-file critics, run **one whole-PR architecture & d
   - Run `arch_stuart` on **Argon (`gemini-launch-candidate-low`)** (highest precision and highest value per 10 findings in our `v5` benchmark).
   - Run Stage 1/2 persona critics on **Argon (`gemini-launch-candidate-low`)** or `inherit` (or `opus-5.5-low` when explicitly requested and quota is healthy).
   - **Never use `flash` models (`gemini-*-flash*`) for code or design review** (`36%` harmful rate and `80%` silent approvals in `v5` evals).
-- **Weigh findings on their merits:** Verify citations against the actual tree before acting on or reporting any finding. Drop findings that contradict repository conventions (such as configured `page_width` in `analysis_options.yaml` or explicit user instructions).
+- **Weigh findings on their merits:** Verify citations against the actual tree before acting on or reporting any finding. Drop findings that contradict repository conventions (such as configured `page_width` in `analysis_options.yaml` or explicit user instructions). When a finding or the PR says a test enforces a rule, open the test and find the assertion that does it.
+- **Removal audit for deletion-heavy PRs:** When a PR removes or consolidates text, list each removed instruction, example or check, and mark it moved, already covered elsewhere (cite the file), or dropped on purpose. Report every unmarked removal as a finding.
+- **Review is not done until fixes are reviewed:** After fixes for findings land, run the falsification gate again on the fix diff (`git diff <reviewed-sha>..<head>`). Report the review state exactly (for example, "reviewed at `<sha>`, fixes not re-reviewed"), never just "ready".
 
 ---
 
