@@ -106,57 +106,70 @@ final class DiffHunk {
 }
 
 final _hunkHeader = RegExp(r'^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@');
+final _diffGitNewPath = RegExp(r' b/(.+)$');
 
 /// The hunks of [diff], in order, with their new-file line ranges.
 List<DiffHunk> parseUnifiedDiff(String diff) {
-  final hunks = <DiffHunk>[];
-  String? path;
-  var deleted = false;
-  var index = 0;
-  int? start;
-  var count = 0;
-  final body = StringBuffer();
+  final parser = _UnifiedDiffParser();
+  const LineSplitter().convert(diff).forEach(parser.addLine);
+  return parser.finish();
+}
 
-  void flush() {
+/// Line-by-line state for [parseUnifiedDiff].
+final class _UnifiedDiffParser {
+  final _hunks = <DiffHunk>[];
+  final _body = StringBuffer();
+  String? _path;
+  var _deleted = false;
+  var _index = 0;
+  int? _start;
+  var _count = 0;
+
+  void addLine(String line) {
+    if (line.startsWith('diff --git ')) {
+      _flush();
+      _path = _diffGitNewPath.firstMatch(line)?[1];
+      _deleted = false;
+      _index = 0;
+    } else if (line.startsWith('deleted file mode')) {
+      _deleted = true;
+    } else if (line.startsWith('+++ ') && _start == null) {
+      final target = line.substring(4);
+      if (target.startsWith('b/')) _path = target.substring(2);
+    } else if (_hunkHeader.firstMatch(line) case final m?) {
+      _flush();
+      _start = int.parse(m[1]!);
+      _count = m[2] == null ? 1 : int.parse(m[2]!);
+      _body.writeln(line);
+    } else if (_start != null) {
+      _body.writeln(line);
+    }
+  }
+
+  /// Flushes the open hunk and returns every hunk parsed so far.
+  List<DiffHunk> finish() {
+    _flush();
+    return _hunks;
+  }
+
+  void _flush() {
+    final path = _path;
+    final start = _start;
     if (path != null && start != null) {
-      hunks.add(
+      _hunks.add(
         DiffHunk(
           path: path,
-          index: index++,
-          newStart: start!,
-          newCount: count,
-          text: body.toString().trimRight(),
-          deletedFile: deleted,
+          index: _index++,
+          newStart: start,
+          newCount: _count,
+          text: _body.toString().trimRight(),
+          deletedFile: _deleted,
         ),
       );
     }
-    start = null;
-    body.clear();
+    _start = null;
+    _body.clear();
   }
-
-  for (final line in const LineSplitter().convert(diff)) {
-    if (line.startsWith('diff --git ')) {
-      flush();
-      final m = RegExp(r' b/(.+)$').firstMatch(line);
-      path = m?[1];
-      deleted = false;
-      index = 0;
-    } else if (line.startsWith('deleted file mode')) {
-      deleted = true;
-    } else if (line.startsWith('+++ ') && start == null) {
-      final target = line.substring(4);
-      if (target.startsWith('b/')) path = target.substring(2);
-    } else if (_hunkHeader.firstMatch(line) case final m?) {
-      flush();
-      start = int.parse(m[1]!);
-      count = m[2] == null ? 1 : int.parse(m[2]!);
-      body.writeln(line);
-    } else if (start != null) {
-      body.writeln(line);
-    }
-  }
-  flush();
-  return hunks;
 }
 
 /// Line-numbered lines of [file] from `context` lines before [hunk] to
@@ -203,6 +216,18 @@ String fileDomain(String path) {
 /// Severity levels a Stage 2 critic may assign, lowest first.
 const severities = ['nit', 'minor', 'major', 'blocking'];
 
+/// One candidate's fields inside a Stage 2 record, with its 1-based candidate
+/// index and its sort order.
+typedef _CandidateMap = ({Map<String, dynamic> fields, int index, int order});
+
+/// Record-level fields that a Stage 2 candidate falls back to.
+typedef _RecordDefaults = ({
+  String path,
+  int line,
+  String lens,
+  Object? severity,
+});
+
 /// One Stage 2 critic candidate comment.
 final class CriticComment {
   final String path;
@@ -237,91 +262,89 @@ final class CriticComment {
     Map<String, dynamic> r,
     int baseOrder,
   ) {
-    final path = '${r['path'] ?? ''}'.trim();
-    final defaultLine = (r['line'] as num?)?.toInt() ?? 0;
-    final defaultLens = '${r['lens'] ?? ''}'.trim();
-    final out = <CriticComment>[];
+    final defaults = (
+      path: '${r['path'] ?? ''}'.trim(),
+      line: (r['line'] as num?)?.toInt() ?? 0,
+      lens: '${r['lens'] ?? ''}'.trim(),
+      severity: r['severity'],
+    );
+    return [
+      for (final candidate in _candidateMaps(r, baseOrder))
+        ?_parseCandidate(candidate, defaults),
+    ];
+  }
 
-    CriticComment? parseOne(
-      Map<String, dynamic> c,
-      int candIdx,
-      int itemOrder,
-    ) {
-      final rawText = '${c['body'] ?? c['comment'] ?? ''}'.trim();
-      const sevAliases = {
-        'must-fix': 'blocking',
-        'should-fix': 'major',
-        'question': 'minor',
-      };
-      final rawSev = '${c['severity'] ?? r['severity'] ?? 'minor'}'
-          .toLowerCase();
-      final sev = sevAliases[rawSev] ?? rawSev;
-      if (rawText.isEmpty ||
-          rawText.toLowerCase() == 'no comment' ||
-          rawText.toLowerCase() == 'null' ||
-          !severities.contains(sev)) {
-        return null;
-      }
-      final cPath = '${c['path'] ?? path}'.trim();
-      final cLine = (c['line'] as num?)?.toInt() ?? defaultLine;
-      final fType = '${c['feedback_type'] ?? c['lens'] ?? defaultLens}'.trim();
-      final conf = ((c['confidence'] as num?)?.toDouble() ?? 0.75).clamp(
+  /// The candidate maps in [r], each with its candidate index and sort order.
+  static List<_CandidateMap> _candidateMaps(
+    Map<String, dynamic> r,
+    int baseOrder,
+  ) {
+    if (r['candidate_1'] is Map || r['candidate_2'] is Map) {
+      return [
+        if (r['candidate_1'] case final Map c1)
+          (fields: c1.cast<String, dynamic>(), index: 1, order: baseOrder * 2),
+        if (r['candidate_2'] case final Map c2)
+          (
+            fields: c2.cast<String, dynamic>(),
+            index: 2,
+            order: baseOrder * 2 + 1,
+          ),
+      ];
+    }
+    if (r['candidates'] ?? r['comments'] case final List list) {
+      return [
+        for (var i = 0; i < list.length; i++)
+          if (list[i] case final Map item)
+            (
+              fields: item.cast<String, dynamic>(),
+              index: i + 1,
+              order: baseOrder * 2 + i,
+            ),
+      ];
+    }
+    return [(fields: r, index: 1, order: baseOrder)];
+  }
+
+  static const _severityAliases = {
+    'must-fix': 'blocking',
+    'should-fix': 'major',
+    'question': 'minor',
+  };
+
+  /// Comment texts that mean the critic had nothing to say.
+  static const _noCommentTexts = {'', 'no comment', 'null'};
+
+  /// Parses one [candidate], falling back to the record-level [defaults], or
+  /// returns null for a no-comment or unknown-severity candidate.
+  static CriticComment? _parseCandidate(
+    _CandidateMap candidate,
+    _RecordDefaults defaults,
+  ) {
+    final c = candidate.fields;
+    final text = '${c['body'] ?? c['comment'] ?? ''}'.trim();
+    final rawSeverity = '${c['severity'] ?? defaults.severity ?? 'minor'}'
+        .toLowerCase();
+    final severity = _severityAliases[rawSeverity] ?? rawSeverity;
+    if (_noCommentTexts.contains(text.toLowerCase()) ||
+        !severities.contains(severity)) {
+      return null;
+    }
+    final feedbackType = '${c['feedback_type'] ?? c['lens'] ?? defaults.lens}'
+        .trim();
+    return CriticComment(
+      path: '${c['path'] ?? defaults.path}'.trim(),
+      line: (c['line'] as num?)?.toInt() ?? defaults.line,
+      comment: text,
+      severity: severity,
+      lens: defaults.lens.isNotEmpty ? defaults.lens : feedbackType,
+      feedbackType: feedbackType,
+      confidence: ((c['confidence'] as num?)?.toDouble() ?? 0.75).clamp(
         0.0,
         1.0,
-      );
-      return CriticComment(
-        path: cPath,
-        line: cLine,
-        comment: rawText,
-        severity: sev,
-        lens: defaultLens.isNotEmpty ? defaultLens : fType,
-        feedbackType: fType,
-        confidence: conf,
-        candidateIndex: candIdx,
-        order: itemOrder,
-      );
-    }
-
-    if (r['candidate_1'] is Map || r['candidate_2'] is Map) {
-      if (r['candidate_1'] is Map) {
-        final c1 = parseOne(
-          (r['candidate_1'] as Map).cast<String, dynamic>(),
-          1,
-          baseOrder * 2,
-        );
-        if (c1 != null) out.add(c1);
-      }
-      if (r['candidate_2'] is Map) {
-        final c2 = parseOne(
-          (r['candidate_2'] as Map).cast<String, dynamic>(),
-          2,
-          baseOrder * 2 + 1,
-        );
-        if (c2 != null) out.add(c2);
-      }
-      return out;
-    }
-
-    final listField = r['candidates'] ?? r['comments'];
-    if (listField is List) {
-      final list = listField;
-      for (var i = 0; i < list.length; i++) {
-        final item = list[i];
-        if (item is Map) {
-          final parsed = parseOne(
-            item.cast<String, dynamic>(),
-            i + 1,
-            baseOrder * 2 + i,
-          );
-          if (parsed != null) out.add(parsed);
-        }
-      }
-      return out;
-    }
-
-    final single = parseOne(r, 1, baseOrder);
-    if (single != null) out.add(single);
-    return out;
+      ),
+      candidateIndex: candidate.index,
+      order: candidate.order,
+    );
   }
 
   /// Parses [r], or returns null for "no comment" records.
@@ -490,156 +513,509 @@ double textSimilarity(String a, String b) {
   return jaccard;
 }
 
+/// Phrases matched against a lowercased review comment: the comment matches
+/// when it contains every [all] phrase and at least one [any] phrase.
+final class _PhraseRule {
+  const _PhraseRule(this.any, {this.all = const []});
+
+  final List<String> any;
+  final List<String> all;
+
+  bool matches(String lowerComment) =>
+      all.every(lowerComment.contains) && any.any(lowerComment.contains);
+}
+
+/// One [personaTypeWeight] tier: [weight] applies when the lowercased
+/// feedback type contains a [types] entry, the lowercased comment matches a
+/// [phrases] rule, or the raw comment contains a [rawPhrases] entry.
+final class _WeightTier {
+  const _WeightTier(
+    this.weight, {
+    this.types = const [],
+    this.phrases = const [],
+    this.rawPhrases = const [],
+  });
+
+  final double weight;
+  final List<String> types;
+  final List<_PhraseRule> phrases;
+  final List<String> rawPhrases;
+
+  bool matches(String lowerType, String lowerComment, String comment) =>
+      types.any(lowerType.contains) ||
+      phrases.any((rule) => rule.matches(lowerComment)) ||
+      rawPhrases.any(comment.contains);
+}
+
+/// The keyword tables that Stage 3 scoring uses for one persona.
+final class _PersonaProfile {
+  const _PersonaProfile({
+    required this.weightTiers,
+    required this.fallbackWeight,
+    required this.bugWeight,
+    required this.signatureMarkers,
+    required this.craftCategories,
+    required this.fallbackCraftCategory,
+    this.suggestionBonus = 0.25,
+    this.penalizesHedges = false,
+  });
+
+  /// Type weight tiers, highest priority first; the first match wins.
+  final List<_WeightTier> weightTiers;
+
+  /// Type weight when no tier matches and the type is not a bug.
+  final double fallbackWeight;
+
+  /// Type weight for `bug` and `bug-lifecycle` comments no tier matched.
+  final double bugWeight;
+
+  /// Concrete craft markers for [hasPersonaSignatureMarker].
+  final List<_PhraseRule> signatureMarkers;
+
+  /// Craft categories for stratified slots, in priority order.
+  final List<(String, _PhraseRule)> craftCategories;
+
+  /// Craft category when no [craftCategories] entry matches.
+  final String fallbackCraftCategory;
+
+  /// Move bonus for a fenced `suggestion` or `dart` code block.
+  final double suggestionBonus;
+
+  /// Whether `non-blocking` and `IMO` hedges cost a move penalty.
+  final bool penalizesHedges;
+}
+
+/// Phrases that point at work landed in, or deferred to, another PR.
+const _scopeCreepPhrases = [
+  'landed in pr',
+  'other pr',
+  'did not agree to this deferred',
+];
+
+/// A review comment about a code comment: the `test-comment` craft marker.
+const _testCommentRule = _PhraseRule(
+  ['dry run', 'deleted', 'empty quote', "'bottom'"],
+  all: ['comment'],
+);
+
+const _jennProfile = _PersonaProfile(
+  weightTiers: [
+    _WeightTier(
+      0.75,
+      types: ['ios-macos', 'xcode', 'cocoapods', 'objc'],
+      phrases: [
+        _PhraseRule([
+          'build_macos.dart',
+          'only migrates ios',
+          'also want to add it here for macos',
+          'podfile',
+          'use_frameworks!',
+          'use_modular_headers!',
+          'xcscheme',
+          'info.plist',
+          'xcdevice',
+          'gesturerecognizer',
+        ]),
+      ],
+    ),
+    _WeightTier(
+      0.72,
+      types: ['concrete-suggestion', 'suggestion'],
+      rawPhrases: ['```suggestion'],
+    ),
+    _WeightTier(
+      0.68,
+      types: ['docs-comments'],
+      phrases: [
+        _PhraseRule([
+          'link back to an issue',
+          'link back to a',
+          'working around',
+          'explaining the bug',
+          'apple.com/xcode',
+        ]),
+      ],
+    ),
+    _WeightTier(
+      0.62,
+      types: ['flutter-tools', 'architecture', 'api-contract', 'api-naming'],
+      phrases: [
+        _PhraseRule(['enhanced enum', 'unawaited', 'aliases', 'dry out']),
+      ],
+    ),
+    _WeightTier(
+      0.58,
+      types: ['tests-verification', 'test-assertion', 'simplify'],
+      phrases: [
+        _PhraseRule(['testwithoutcontext', 'unused import']),
+      ],
+    ),
+    _WeightTier(
+      0.55,
+      types: ['scope'],
+      phrases: [
+        _PhraseRule(['break it into', 'split']),
+      ],
+    ),
+  ],
+  fallbackWeight: 0.30,
+  bugWeight: 0.25,
+  signatureMarkers: [
+    _PhraseRule([
+      'build_macos.dart',
+      'only migrates ios',
+      'also want to add it here for macos',
+      'info.plist',
+      'xcscheme',
+      'podfile',
+      'use_frameworks!',
+      'use_modular_headers!',
+      'gesturerecognizer',
+      'respondstoselector',
+      'synthesized property',
+      'backing ivar',
+      'link back to an issue',
+      'link back to a',
+      'working around',
+      'explaining the bug',
+      'unused import',
+      'enhanced enum',
+      'unawaited',
+      'testwithoutcontext',
+      'i know you',
+      'directoryfrompath',
+      'help.apple.com/xcode',
+      '--vm-service-url',
+      'takescreenshot',
+      '```suggestion',
+    ]),
+    _PhraseRule(['target'], all: ['codesign']),
+    _PhraseRule(['screenshot'], all: ['aliases']),
+  ],
+  craftCategories: [
+    (
+      'ios-macos-parity',
+      _PhraseRule(['build_macos', 'only migrates ios', 'for macos']),
+    ),
+    (
+      'workaround-issue-link',
+      _PhraseRule(['link back to', 'working around', 'explaining the bug']),
+    ),
+    (
+      'objc-idiom',
+      _PhraseRule([
+        'gesturerecognizer',
+        'synthesized property',
+        'backing ivar',
+      ]),
+    ),
+    ('xcode-plist-podfile', _PhraseRule(['info.plist', 'xcscheme', 'podfile'])),
+    ('unused-import', _PhraseRule(['unused import'])),
+    ('dart-idiom', _PhraseRule(['enhanced enum', 'unawaited'])),
+    ('suggestion-block', _PhraseRule(['```suggestion'])),
+  ],
+  fallbackCraftCategory: 'other-jenn-craft',
+  suggestionBonus: 0.38,
+  penalizesHedges: true,
+);
+
+const _flutterToolsGhostProfile = _PersonaProfile(
+  weightTiers: [
+    _WeightTier(
+      0.78,
+      types: ['di-globals', 'hermetic'],
+      phrases: [
+        _PhraseRule([
+          'globals.',
+          'testwithoutcontext',
+          'bufferlogger',
+          'fakeprocessmanager',
+          'memoryfilesystem',
+        ]),
+      ],
+    ),
+    _WeightTier(
+      0.75,
+      types: ['build-system'],
+      phrases: [
+        _PhraseRule([
+          'releaseunpackmacos',
+          'unpackmacos',
+          'caching fail',
+          'source.artifact',
+        ]),
+        _PhraseRule(['outputs'], all: ['target']),
+      ],
+    ),
+    _WeightTier(
+      0.70,
+      types: ['cli-ux', 'toolexit'],
+      phrases: [
+        _PhraseRule(['throwtoolexit', 'toolexit', 'stateerror', 'printtrace']),
+        _PhraseRule(['option'], all: ['top-level']),
+      ],
+    ),
+    _WeightTier(
+      0.68,
+      types: ['ios-macos', 'cocoapods', 'swiftpm'],
+      phrases: [
+        _PhraseRule([
+          'swift package manager',
+          'vendored_frameworks',
+          'podspec',
+          'info.plist',
+        ]),
+      ],
+    ),
+    _WeightTier(
+      0.64,
+      types: ['process-io', 'correctness'],
+      phrases: [
+        _PhraseRule([
+          'errorhandlingfilesystem',
+          'getbuilddirectory',
+          'dart:io',
+          'base/io.dart',
+        ]),
+      ],
+    ),
+    _WeightTier(
+      0.58,
+      types: ['concrete-suggestion', 'docs-comments', 'simplify'],
+      rawPhrases: ['```suggestion'],
+    ),
+  ],
+  fallbackWeight: 0.30,
+  bugWeight: 0.25,
+  signatureMarkers: [
+    _PhraseRule([
+      'globals.',
+      'context globals',
+      'testwithoutcontext',
+      'bufferlogger',
+      'fakeprocessmanager',
+      'memoryfilesystem',
+      'throwtoolexit',
+      'errorhandlingfilesystem',
+      'getbuilddirectory',
+      'base/io.dart',
+      'releaseunpackmacos',
+      'unpackmacos',
+      '_gethostartifactpath',
+      'fluttermacosframeworkdsym',
+      'printtrace',
+      'unused import',
+      'swift package manager',
+      'swiftpm',
+      'vendored_frameworks',
+      'copyvendoredframeworks',
+      'dartdevc-module-format',
+      '```suggestion',
+    ]),
+    _PhraseRule(['stateerror'], all: ['toolexit']),
+  ],
+  craftCategories: [
+    ('di-globals', _PhraseRule(['globals.', 'context globals'])),
+    (
+      'hermetic-test-fakes',
+      _PhraseRule([
+        'testwithoutcontext',
+        'bufferlogger',
+        'fakeprocessmanager',
+        'memoryfilesystem',
+      ]),
+    ),
+    (
+      'toolexit-error',
+      _PhraseRule(['throwtoolexit', 'toolexit', 'stateerror']),
+    ),
+    (
+      'build-system-target',
+      _PhraseRule(['releaseunpackmacos', 'unpackmacos', 'source.artifact']),
+    ),
+    ('trace-plist', _PhraseRule(['printtrace', 'info.plist'])),
+    ('unused-import', _PhraseRule(['unused import'])),
+    (
+      'darwin-frameworks',
+      _PhraseRule([
+        'vendored_frameworks',
+        'swift package manager',
+        'copyvendoredframeworks',
+      ]),
+    ),
+  ],
+  fallbackCraftCategory: 'other-tools-craft',
+  penalizesHedges: true,
+);
+
+const _defaultWeightTiers = [
+  _WeightTier(
+    0.75,
+    types: ['scope'],
+    phrases: [_PhraseRule(_scopeCreepPhrases)],
+  ),
+  _WeightTier(
+    0.72,
+    types: ['script-vs-dart', 'bash'],
+    phrases: [
+      _PhraseRule(['bash', 'into the dart', 'into dart']),
+    ],
+  ),
+  _WeightTier(
+    0.65,
+    types: ['architecture', 'api-design', 'placement', 'structure'],
+  ),
+  _WeightTier(
+    0.60,
+    types: ['ci-workflow', 'process-release-ci'],
+    phrases: [
+      _PhraseRule(['reusable workflow', 'duplicate']),
+    ],
+  ),
+  _WeightTier(0.55, types: ['test', 'why-needed', 'clarify']),
+  _WeightTier(
+    0.50,
+    types: [
+      'api-naming',
+      'ergonomics',
+      'future-maintainer',
+      'config-sdk',
+      'suggestion',
+    ],
+  ),
+];
+
+const _defaultSignatureMarkers = [
+  _PhraseRule([
+    'pronoun',
+    'two-space',
+    'two spaces',
+    'empty string',
+    "empty `''`",
+    'already have a',
+    'someplace else in the codebase',
+    'change detector',
+    'reusable workflow',
+    'why a new file',
+    'in a new test file',
+    'why duplicate the',
+    'duplicate the false default',
+    'inline it',
+    'inlining the',
+    'helper method',
+    'easier to read',
+    'easier to follow',
+    'hard to read',
+    'type safe',
+    'typesafe',
+    'multi-line string',
+    '```suggestion',
+    '->',
+    's/',
+    "don't start any dartdoc with",
+    'start with `returns`',
+    'single sentence',
+    'single-pass',
+    '.tolist()',
+    '.toset()',
+    'here and below:',
+    'here and elsewhere:',
+    'nitpick:',
+  ]),
+  _PhraseRule(
+    [
+      'standardize',
+      'mix',
+      'both',
+      'match the',
+      'all .yaml',
+      'all `.yaml`',
+      'all yaml',
+    ],
+    all: ['.yaml', '.yml'],
+  ),
+  _testCommentRule,
+];
+
+const _defaultCraftCategories = [
+  ('pronoun', _PhraseRule(['pronoun'])),
+  (
+    'inline-constant',
+    _PhraseRule(['two-space', 'two spaces', 'inline it', 'inlining the']),
+  ),
+  ('yaml-ext', _PhraseRule(['.yml'], all: ['.yaml'])),
+  ('test-comment', _testCommentRule),
+  ('default-dedup', _PhraseRule(['why duplicate', 'false default'])),
+  ('concrete-rewrite', _PhraseRule(['```suggestion', '->', 's/'])),
+  ('dartdoc-precision', _PhraseRule(['dartdoc', 'returns', 'single sentence'])),
+  ('collection-idiom', _PhraseRule(['.tolist()', '.toset()', 'single-pass'])),
+  (
+    'readability-helper',
+    _PhraseRule([
+      'helper method',
+      'easier to read',
+      'easier to follow',
+      'hard to read',
+    ]),
+  ),
+];
+
+const _defaultProfile = _PersonaProfile(
+  weightTiers: _defaultWeightTiers,
+  fallbackWeight: 0.25,
+  bugWeight: 0.45,
+  signatureMarkers: _defaultSignatureMarkers,
+  craftCategories: _defaultCraftCategories,
+  fallbackCraftCategory: 'other-craft',
+);
+
+/// The Reid persona weighs `bug` comments lower than other default personas.
+const _reidProfile = _PersonaProfile(
+  weightTiers: _defaultWeightTiers,
+  fallbackWeight: 0.25,
+  bugWeight: 0.10,
+  signatureMarkers: _defaultSignatureMarkers,
+  craftCategories: _defaultCraftCategories,
+  fallbackCraftCategory: 'other-craft',
+);
+
+_PersonaProfile _profileFor(String personSlug) => switch (personSlug) {
+  'jenn-magder' => _jennProfile,
+  'flutter-tools-ghost' => _flutterToolsGhostProfile,
+  'reid-baker' => _reidProfile,
+  _ => _defaultProfile,
+};
+
 /// Empirical persona weight for [effectiveType] and [comment] content.
 double personaTypeWeight(
   String personSlug,
   String effectiveType,
   String comment,
 ) {
+  final profile = _profileFor(personSlug);
   final t = effectiveType.toLowerCase();
   final lower = comment.toLowerCase();
-
-  if (personSlug == 'jenn-magder') {
-    var weight = 0.30;
-    if (t.contains('ios-macos') ||
-        t.contains('xcode') ||
-        t.contains('cocoapods') ||
-        t.contains('objc') ||
-        lower.contains('build_macos.dart') ||
-        lower.contains('only migrates ios') ||
-        lower.contains('also want to add it here for macos') ||
-        lower.contains('podfile') ||
-        lower.contains('use_frameworks!') ||
-        lower.contains('use_modular_headers!') ||
-        lower.contains('xcscheme') ||
-        lower.contains('info.plist') ||
-        lower.contains('xcdevice') ||
-        lower.contains('gesturerecognizer')) {
-      weight = 0.75;
-    } else if (t.contains('concrete-suggestion') ||
-        t.contains('suggestion') ||
-        comment.contains('```suggestion')) {
-      weight = 0.72;
-    } else if (t.contains('docs-comments') ||
-        lower.contains('link back to an issue') ||
-        lower.contains('link back to a') ||
-        lower.contains('working around') ||
-        lower.contains('explaining the bug') ||
-        lower.contains('apple.com/xcode')) {
-      weight = 0.68;
-    } else if (t.contains('flutter-tools') ||
-        t.contains('architecture') ||
-        t.contains('api-contract') ||
-        t.contains('api-naming') ||
-        lower.contains('enhanced enum') ||
-        lower.contains('unawaited') ||
-        lower.contains('aliases') ||
-        lower.contains('dry out')) {
-      weight = 0.62;
-    } else if (t.contains('tests-verification') ||
-        t.contains('test-assertion') ||
-        t.contains('simplify') ||
-        lower.contains('testwithoutcontext') ||
-        lower.contains('unused import')) {
-      weight = 0.58;
-    } else if (t.contains('scope') ||
-        lower.contains('break it into') ||
-        lower.contains('split')) {
-      weight = 0.55;
-    } else if (t == 'bug' || t.contains('bug-lifecycle')) {
-      weight = 0.25;
-    }
-    return weight;
+  for (final tier in profile.weightTiers) {
+    if (tier.matches(t, lower, comment)) return tier.weight;
   }
-
-  if (personSlug == 'flutter-tools-ghost') {
-    var weight = 0.30;
-    if (t.contains('di-globals') ||
-        t.contains('hermetic') ||
-        lower.contains('globals.') ||
-        lower.contains('testwithoutcontext') ||
-        lower.contains('bufferlogger') ||
-        lower.contains('fakeprocessmanager') ||
-        lower.contains('memoryfilesystem')) {
-      weight = 0.78;
-    } else if (t.contains('build-system') ||
-        lower.contains('releaseunpackmacos') ||
-        lower.contains('unpackmacos') ||
-        lower.contains('target') && lower.contains('outputs') ||
-        lower.contains('caching fail') ||
-        lower.contains('source.artifact')) {
-      weight = 0.75;
-    } else if (t.contains('cli-ux') ||
-        t.contains('toolexit') ||
-        lower.contains('throwtoolexit') ||
-        lower.contains('toolexit') ||
-        lower.contains('stateerror') ||
-        lower.contains('printtrace') ||
-        lower.contains('top-level') && lower.contains('option')) {
-      weight = 0.70;
-    } else if (t.contains('ios-macos') ||
-        t.contains('cocoapods') ||
-        t.contains('swiftpm') ||
-        lower.contains('swift package manager') ||
-        lower.contains('vendored_frameworks') ||
-        lower.contains('podspec') ||
-        lower.contains('info.plist')) {
-      weight = 0.68;
-    } else if (t.contains('process-io') ||
-        t.contains('correctness') ||
-        lower.contains('errorhandlingfilesystem') ||
-        lower.contains('getbuilddirectory') ||
-        lower.contains('dart:io') ||
-        lower.contains('base/io.dart')) {
-      weight = 0.64;
-    } else if (t.contains('concrete-suggestion') ||
-        t.contains('docs-comments') ||
-        t.contains('simplify') ||
-        comment.contains('```suggestion')) {
-      weight = 0.58;
-    } else if (t == 'bug' || t.contains('bug-lifecycle')) {
-      weight = 0.25;
-    }
-    return weight;
-  }
-
-  var weight = 0.25;
-  if (t.contains('scope') ||
-      lower.contains('landed in pr') ||
-      lower.contains('other pr') ||
-      lower.contains('did not agree to this deferred')) {
-    weight = 0.75;
-  } else if (t.contains('script-vs-dart') ||
-      t.contains('bash') ||
-      lower.contains('bash') ||
-      lower.contains('into the dart') ||
-      lower.contains('into dart')) {
-    weight = 0.72;
-  } else if (t.contains('architecture') ||
-      t.contains('api-design') ||
-      t.contains('placement') ||
-      t.contains('structure')) {
-    weight = 0.65;
-  } else if (t.contains('ci-workflow') ||
-      t.contains('process-release-ci') ||
-      lower.contains('reusable workflow') ||
-      lower.contains('duplicate')) {
-    weight = 0.60;
-  } else if (t.contains('test') ||
-      t.contains('why-needed') ||
-      t.contains('clarify')) {
-    weight = 0.55;
-  } else if (t.contains('api-naming') ||
-      t.contains('ergonomics') ||
-      t.contains('future-maintainer') ||
-      t.contains('config-sdk') ||
-      t.contains('suggestion')) {
-    weight = 0.50;
-  } else if (t == 'bug' || t.contains('bug-lifecycle')) {
-    weight = personSlug == 'reid-baker' ? 0.10 : 0.45;
-  }
-  return weight;
+  if (t == 'bug' || t.contains('bug-lifecycle')) return profile.bugWeight;
+  return profile.fallbackWeight;
 }
+
+final _personaOpener = RegExp(
+  r'^(why|should|do we|is there|can we|can this|can you|does this|what happens|too many|too long|this change was landed|here and below|nitpick:|nit:|i know you|how about|did you mean)',
+  caseSensitive: false,
+);
+
+final _genericDefensiveEssay = RegExp(
+  r'network blip|rate limit|if `gh release view` fails|malformed input|race condition|\bfwiw\b|\bimho\b|\bmy gut says\b',
+  caseSensitive: false,
+);
+
+final _blockingHedge = RegExp(
+  r'\bnon-?blocking\b|\bimo\b',
+  caseSensitive: false,
+);
 
 /// Bonus for persona-aligned rhetorical moves and penalty for generic AI
 /// defensive-programming essays.
@@ -647,51 +1023,32 @@ double personaMoveAdjustment(
   String comment, {
   String personSlug = 'reid-baker',
 }) {
+  final profile = _profileFor(personSlug);
   final trimmed = comment.trim();
   final lower = trimmed.toLowerCase();
   final wordCount = trimmed.split(RegExp(r'\s+')).length;
+  // Keep this summation order: the scores feed sort ties and thresholds.
   var adj = 0.0;
-
   if (trimmed.contains('```suggestion') || trimmed.contains('```dart')) {
-    adj += personSlug == 'jenn-magder' ? 0.38 : 0.25;
+    adj += profile.suggestionBonus;
   }
   if (trimmed.contains('?') && wordCount <= 35) adj += 0.20;
-  if (RegExp(
-    r'^(why|should|do we|is there|can we|can this|can you|does this|what happens|too many|too long|this change was landed|here and below|nitpick:|nit:|i know you|how about|did you mean)',
-    caseSensitive: false,
-  ).hasMatch(trimmed)) {
-    adj += 0.20;
-  }
-  if (hasPersonaSignatureMarker(lower, personSlug: personSlug)) {
-    adj += 0.65;
-  }
-  if (lower.contains('landed in pr') ||
-      lower.contains('other pr') ||
-      lower.contains('did not agree to this deferred')) {
-    adj += 0.35;
-  }
-
-  if (wordCount >= 3 && wordCount <= 32) {
-    adj += 0.20;
-  } else if (wordCount > 65) {
-    adj -= 0.45;
-  }
-
-  if (RegExp(
-    r'network blip|rate limit|if `gh release view` fails|malformed input|race condition|\bfwiw\b|\bimho\b|\bmy gut says\b',
-    caseSensitive: false,
-  ).hasMatch(trimmed)) {
-    adj -= 0.55;
-  }
-  if ((personSlug == 'jenn-magder' || personSlug == 'flutter-tools-ghost') &&
-      RegExp(
-        r'\bnon-?blocking\b|\bimo\b',
-        caseSensitive: false,
-      ).hasMatch(trimmed)) {
+  if (_personaOpener.hasMatch(trimmed)) adj += 0.20;
+  if (hasPersonaSignatureMarker(lower, personSlug: personSlug)) adj += 0.65;
+  if (_scopeCreepPhrases.any(lower.contains)) adj += 0.35;
+  adj += _lengthAdjustment(wordCount);
+  if (_genericDefensiveEssay.hasMatch(trimmed)) adj -= 0.55;
+  if (profile.penalizesHedges && _blockingHedge.hasMatch(trimmed)) {
     adj -= 0.40;
   }
-
   return adj;
+}
+
+/// Bonus for a short comment and penalty for an essay.
+double _lengthAdjustment(int wordCount) {
+  if (wordCount >= 3 && wordCount <= 32) return 0.20;
+  if (wordCount > 65) return -0.45;
+  return 0.0;
 }
 
 /// Whether [lowerComment] exhibits a concrete persona craft/readability,
@@ -700,120 +1057,9 @@ double personaMoveAdjustment(
 bool hasPersonaSignatureMarker(
   String lowerComment, {
   String personSlug = 'reid-baker',
-}) {
-  if (personSlug == 'jenn-magder') {
-    return lowerComment.contains('build_macos.dart') ||
-        lowerComment.contains('only migrates ios') ||
-        lowerComment.contains('also want to add it here for macos') ||
-        lowerComment.contains('info.plist') ||
-        lowerComment.contains('xcscheme') ||
-        lowerComment.contains('podfile') ||
-        lowerComment.contains('use_frameworks!') ||
-        lowerComment.contains('use_modular_headers!') ||
-        lowerComment.contains('gesturerecognizer') ||
-        lowerComment.contains('respondstoselector') ||
-        lowerComment.contains('synthesized property') ||
-        lowerComment.contains('backing ivar') ||
-        lowerComment.contains('link back to an issue') ||
-        lowerComment.contains('link back to a') ||
-        lowerComment.contains('working around') ||
-        lowerComment.contains('explaining the bug') ||
-        lowerComment.contains('unused import') ||
-        lowerComment.contains('enhanced enum') ||
-        lowerComment.contains('unawaited') ||
-        lowerComment.contains('testwithoutcontext') ||
-        lowerComment.contains('i know you') ||
-        lowerComment.contains('directoryfrompath') ||
-        lowerComment.contains('codesign') && lowerComment.contains('target') ||
-        lowerComment.contains('help.apple.com/xcode') ||
-        lowerComment.contains('aliases') &&
-            lowerComment.contains('screenshot') ||
-        lowerComment.contains('--vm-service-url') ||
-        lowerComment.contains('takescreenshot') ||
-        lowerComment.contains('```suggestion');
-  }
-  if (personSlug == 'flutter-tools-ghost') {
-    return lowerComment.contains('globals.') ||
-        lowerComment.contains('context globals') ||
-        lowerComment.contains('testwithoutcontext') ||
-        lowerComment.contains('bufferlogger') ||
-        lowerComment.contains('fakeprocessmanager') ||
-        lowerComment.contains('memoryfilesystem') ||
-        lowerComment.contains('throwtoolexit') ||
-        lowerComment.contains('toolexit') &&
-            lowerComment.contains('stateerror') ||
-        lowerComment.contains('errorhandlingfilesystem') ||
-        lowerComment.contains('getbuilddirectory') ||
-        lowerComment.contains('base/io.dart') ||
-        lowerComment.contains('releaseunpackmacos') ||
-        lowerComment.contains('unpackmacos') ||
-        lowerComment.contains('_gethostartifactpath') ||
-        lowerComment.contains('fluttermacosframeworkdsym') ||
-        lowerComment.contains('printtrace') ||
-        lowerComment.contains('unused import') ||
-        lowerComment.contains('swift package manager') ||
-        lowerComment.contains('swiftpm') ||
-        lowerComment.contains('vendored_frameworks') ||
-        lowerComment.contains('copyvendoredframeworks') ||
-        lowerComment.contains('dartdevc-module-format') ||
-        lowerComment.contains('```suggestion');
-  }
-  if (lowerComment.contains('pronoun') ||
-      lowerComment.contains('two-space') ||
-      lowerComment.contains('two spaces') ||
-      lowerComment.contains('empty string') ||
-      lowerComment.contains("empty `''`") ||
-      lowerComment.contains('already have a') ||
-      lowerComment.contains('someplace else in the codebase') ||
-      lowerComment.contains('change detector') ||
-      lowerComment.contains('reusable workflow') ||
-      lowerComment.contains('why a new file') ||
-      lowerComment.contains('in a new test file') ||
-      lowerComment.contains('why duplicate the') ||
-      lowerComment.contains('duplicate the false default') ||
-      lowerComment.contains('inline it') ||
-      lowerComment.contains('inlining the') ||
-      lowerComment.contains('helper method') ||
-      lowerComment.contains('easier to read') ||
-      lowerComment.contains('easier to follow') ||
-      lowerComment.contains('hard to read') ||
-      lowerComment.contains('type safe') ||
-      lowerComment.contains('typesafe') ||
-      lowerComment.contains('multi-line string') ||
-      lowerComment.contains('```suggestion') ||
-      lowerComment.contains('->') ||
-      lowerComment.contains('s/') ||
-      lowerComment.contains("don't start any dartdoc with") ||
-      lowerComment.contains('start with `returns`') ||
-      lowerComment.contains('single sentence') ||
-      lowerComment.contains('single-pass') ||
-      lowerComment.contains('.tolist()') ||
-      lowerComment.contains('.toset()') ||
-      lowerComment.contains('here and below:') ||
-      lowerComment.contains('here and elsewhere:') ||
-      lowerComment.contains('nitpick:')) {
-    return true;
-  }
-  if (lowerComment.contains('.yaml') &&
-      lowerComment.contains('.yml') &&
-      (lowerComment.contains('standardize') ||
-          lowerComment.contains('mix') ||
-          lowerComment.contains('both') ||
-          lowerComment.contains('match the') ||
-          lowerComment.contains('all .yaml') ||
-          lowerComment.contains('all `.yaml`') ||
-          lowerComment.contains('all yaml'))) {
-    return true;
-  }
-  if (lowerComment.contains('comment') &&
-      (lowerComment.contains('dry run') ||
-          lowerComment.contains('deleted') ||
-          lowerComment.contains('empty quote') ||
-          lowerComment.contains("'bottom'"))) {
-    return true;
-  }
-  return false;
-}
+}) =>
+    _profileFor(personSlug).signatureMarkers
+        .any((rule) => rule.matches(lowerComment));
 
 /// Compressed base severity score so that high-signal `minor`/`nit` persona
 /// craft catches can compete with generic `major` structural questions.
@@ -838,111 +1084,11 @@ double compositeScore(CriticComment c, {String personSlug = 'reid-baker'}) {
 /// Craft category for stratified slot diversity so two pronoun comments do not
 /// crowd out a constant-inlining, rewrite, or test-comment catch.
 String _craftCategory(String lowerComment, {String personSlug = 'reid-baker'}) {
-  if (personSlug == 'jenn-magder') {
-    if (lowerComment.contains('build_macos') ||
-        lowerComment.contains('only migrates ios') ||
-        lowerComment.contains('for macos')) {
-      return 'ios-macos-parity';
-    }
-    if (lowerComment.contains('link back to') ||
-        lowerComment.contains('working around') ||
-        lowerComment.contains('explaining the bug')) {
-      return 'workaround-issue-link';
-    }
-    if (lowerComment.contains('gesturerecognizer') ||
-        lowerComment.contains('synthesized property') ||
-        lowerComment.contains('backing ivar')) {
-      return 'objc-idiom';
-    }
-    if (lowerComment.contains('info.plist') ||
-        lowerComment.contains('xcscheme') ||
-        lowerComment.contains('podfile')) {
-      return 'xcode-plist-podfile';
-    }
-    if (lowerComment.contains('unused import')) return 'unused-import';
-    if (lowerComment.contains('enhanced enum') ||
-        lowerComment.contains('unawaited')) {
-      return 'dart-idiom';
-    }
-    if (lowerComment.contains('```suggestion')) return 'suggestion-block';
-    return 'other-jenn-craft';
+  final profile = _profileFor(personSlug);
+  for (final (category, rule) in profile.craftCategories) {
+    if (rule.matches(lowerComment)) return category;
   }
-  if (personSlug == 'flutter-tools-ghost') {
-    if (lowerComment.contains('globals.') ||
-        lowerComment.contains('context globals')) {
-      return 'di-globals';
-    }
-    if (lowerComment.contains('testwithoutcontext') ||
-        lowerComment.contains('bufferlogger') ||
-        lowerComment.contains('fakeprocessmanager') ||
-        lowerComment.contains('memoryfilesystem')) {
-      return 'hermetic-test-fakes';
-    }
-    if (lowerComment.contains('throwtoolexit') ||
-        lowerComment.contains('toolexit') ||
-        lowerComment.contains('stateerror')) {
-      return 'toolexit-error';
-    }
-    if (lowerComment.contains('releaseunpackmacos') ||
-        lowerComment.contains('unpackmacos') ||
-        lowerComment.contains('source.artifact')) {
-      return 'build-system-target';
-    }
-    if (lowerComment.contains('printtrace') ||
-        lowerComment.contains('info.plist')) {
-      return 'trace-plist';
-    }
-    if (lowerComment.contains('unused import')) return 'unused-import';
-    if (lowerComment.contains('vendored_frameworks') ||
-        lowerComment.contains('swift package manager') ||
-        lowerComment.contains('copyvendoredframeworks')) {
-      return 'darwin-frameworks';
-    }
-    return 'other-tools-craft';
-  }
-  if (lowerComment.contains('pronoun')) return 'pronoun';
-  if (lowerComment.contains('two-space') ||
-      lowerComment.contains('two spaces') ||
-      lowerComment.contains('inline it') ||
-      lowerComment.contains('inlining the')) {
-    return 'inline-constant';
-  }
-  if (lowerComment.contains('.yaml') && lowerComment.contains('.yml')) {
-    return 'yaml-ext';
-  }
-  if (lowerComment.contains('comment') &&
-      (lowerComment.contains('dry run') ||
-          lowerComment.contains('deleted') ||
-          lowerComment.contains('empty quote') ||
-          lowerComment.contains("'bottom'"))) {
-    return 'test-comment';
-  }
-  if (lowerComment.contains('why duplicate') ||
-      lowerComment.contains('false default')) {
-    return 'default-dedup';
-  }
-  if (lowerComment.contains('```suggestion') ||
-      lowerComment.contains('->') ||
-      lowerComment.contains('s/')) {
-    return 'concrete-rewrite';
-  }
-  if (lowerComment.contains('dartdoc') ||
-      lowerComment.contains('returns') ||
-      lowerComment.contains('single sentence')) {
-    return 'dartdoc-precision';
-  }
-  if (lowerComment.contains('.tolist()') ||
-      lowerComment.contains('.toset()') ||
-      lowerComment.contains('single-pass')) {
-    return 'collection-idiom';
-  }
-  if (lowerComment.contains('helper method') ||
-      lowerComment.contains('easier to read') ||
-      lowerComment.contains('easier to follow') ||
-      lowerComment.contains('hard to read')) {
-    return 'readability-helper';
-  }
-  return 'other-craft';
+  return profile.fallbackCraftCategory;
 }
 
 /// Whether [c] belongs to the persona craft/readability/test-clarity stratum
@@ -976,66 +1122,77 @@ List<CriticComment> _selectStratifiedTopK(
   }
 
   final maxCraftQuota = passIndex >= 3 ? 1 : (k >= 5 ? 2 : 1);
-
-  final craftPool = <CriticComment>[];
-  final craftFiles = <String>{};
-  final craftCategories = <String>{};
-  for (final c in deduped) {
-    final cat = _craftCategory(c.comment.toLowerCase(), personSlug: personSlug);
-    if (_isCraftPersonaCandidate(c, personSlug: personSlug) &&
-        compositeScore(c, personSlug: personSlug) >= 2.0 &&
-        craftFiles.add(c.path) &&
-        craftCategories.add(cat)) {
-      craftPool.add(c);
-    }
-  }
-  if (craftPool.length < maxCraftQuota) {
-    for (final c in deduped) {
-      if (craftPool.length >= maxCraftQuota) break;
-      if (craftPool.contains(c)) continue;
-      final cat = _craftCategory(
-        c.comment.toLowerCase(),
-        personSlug: personSlug,
-      );
-      if (_isCraftPersonaCandidate(c, personSlug: personSlug) &&
-          compositeScore(c, personSlug: personSlug) >= 2.0 &&
-          craftCategories.add(cat)) {
-        craftPool.add(c);
-      }
-    }
-  }
+  final craftPool = _craftPool(
+    deduped,
+    maxCraftQuota: maxCraftQuota,
+    personSlug: personSlug,
+  );
   if (craftPool.isEmpty) {
     return deduped.take(k).toList();
   }
 
   final reservedCraft = craftPool.take(maxCraftQuota).toList();
-  final structuralQuota = k - reservedCraft.length;
-  final selected = <CriticComment>[];
+  final selected = _structuralPicks(
+    deduped,
+    quota: k - reservedCraft.length,
+    reserved: reservedCraft,
+  );
+  // Add the reserved craft catches, then fill any free slots in rank order.
+  for (final c in [...reservedCraft, ...deduped]) {
+    if (selected.length >= k) break;
+    if (!selected.contains(c)) selected.add(c);
+  }
+  return selected;
+}
 
-  var sameHereCount = 0;
+/// High-scoring craft catches from [deduped]: first one per file and per
+/// craft category, then, while fewer than [maxCraftQuota], one per category.
+List<CriticComment> _craftPool(
+  List<CriticComment> deduped, {
+  required int maxCraftQuota,
+  required String personSlug,
+}) {
+  bool qualifies(CriticComment c) =>
+      _isCraftPersonaCandidate(c, personSlug: personSlug) &&
+      compositeScore(c, personSlug: personSlug) >= 2.0;
+  String category(CriticComment c) =>
+      _craftCategory(c.comment.toLowerCase(), personSlug: personSlug);
+
+  final pool = <CriticComment>[];
+  final files = <String>{};
+  final categories = <String>{};
   for (final c in deduped) {
-    if (selected.length >= structuralQuota) break;
-    if (reservedCraft.contains(c)) continue;
+    if (qualifies(c) && files.add(c.path) && categories.add(category(c))) {
+      pool.add(c);
+    }
+  }
+  for (final c in deduped) {
+    if (pool.length >= maxCraftQuota) break;
+    if (!pool.contains(c) && qualifies(c) && categories.add(category(c))) {
+      pool.add(c);
+    }
+  }
+  return pool;
+}
+
+/// The first [quota] comments of [deduped] that are not in [reserved],
+/// keeping at most one `Same here.` repeat.
+List<CriticComment> _structuralPicks(
+  List<CriticComment> deduped, {
+  required int quota,
+  required List<CriticComment> reserved,
+}) {
+  final selected = <CriticComment>[];
+  var keptSameHere = false;
+  for (final c in deduped) {
+    if (selected.length >= quota) break;
+    if (reserved.contains(c)) continue;
     if (c.comment == 'Same here.') {
-      if (sameHereCount >= 1) continue;
-      sameHereCount++;
+      if (keptSameHere) continue;
+      keptSameHere = true;
     }
     selected.add(c);
   }
-
-  for (final c in reservedCraft) {
-    if (selected.length < k && !selected.contains(c)) {
-      selected.add(c);
-    }
-  }
-
-  for (final c in deduped) {
-    if (selected.length >= k) break;
-    if (!selected.contains(c)) {
-      selected.add(c);
-    }
-  }
-
   return selected;
 }
 
@@ -1066,39 +1223,11 @@ RankedReview rankReview(
       ).compareTo(compositeScore(x, personSlug: personSlug));
       return s != 0 ? s : x.order.compareTo(y.order);
     });
-  final primaries = <CriticComment>[];
-  final repeats = <CriticComment, List<CriticComment>>{};
-  for (final c in ranked) {
-    if (primaries.any(
-      (o) => o.path == c.path && (o.line - c.line).abs() <= lineWindow,
-    )) {
-      continue;
-    }
-    final twin = primaries.where((o) {
-      if (_sharesSameFileSubject(o, c)) {
-        final cx = _contentWords(o.comment);
-        final cy = _contentWords(c.comment);
-        if (cx.intersection(cy).length >= 3) return true;
-      }
-      final sim = textSimilarity(o.comment, c.comment);
-      final threshold = o.path == c.path ? similarity * 0.85 : similarity;
-      return sim >= threshold;
-    }).firstOrNull;
-    if (twin != null) {
-      if (_sharesSameFileSubject(twin, c)) {
-        continue;
-      }
-      final list = repeats[twin] ??= [];
-      if (!list.any((r) => r.path == c.path)) {
-        list.add(c.withComment('Same here.'));
-      }
-      continue;
-    }
-    primaries.add(c);
-  }
-  final deduped = [
-    for (final c in primaries) ...[c, ...?repeats[c]],
-  ];
+  final deduped = _dedupeRanked(
+    ranked,
+    lineWindow: lineWindow,
+    similarity: similarity,
+  );
   final kept = _selectStratifiedTopK(
     deduped,
     k: k,
@@ -1117,15 +1246,6 @@ RankedReview rankReview(
             c.severityRank >= severities.indexOf('major'),
       )
       .length;
-  final hasBlockingScopeCreep = kept.any((c) {
-    final lower = c.comment.toLowerCase();
-    return c.severityRank >= severities.indexOf('major') &&
-        (lower.contains('landed in pr') ||
-            lower.contains('other pr') ||
-            lower.contains('did not agree to this deferred') ||
-            lower.contains('new test file') ||
-            lower.contains('why a new file'));
-  });
   return RankedReview(
     deduped: deduped,
     comments: kept,
@@ -1133,10 +1253,73 @@ RankedReview rankReview(
       passIndex: passIndex,
       maxSeverity: max,
       majorCount: majorCount,
-      hasBlockingScopeCreep: hasBlockingScopeCreep,
+      hasBlockingScopeCreep: kept.any(_isBlockingScopeCreep),
     ),
     maxSeverity: max,
   );
+}
+
+/// Drops comments within [lineWindow] lines of a higher-ranked comment on the
+/// same file, and folds near-duplicates on other files into one `Same here.`
+/// repeat per file after the comment they repeat.
+List<CriticComment> _dedupeRanked(
+  List<CriticComment> ranked, {
+  required int lineWindow,
+  required double similarity,
+}) {
+  final primaries = <CriticComment>[];
+  final repeats = <CriticComment, List<CriticComment>>{};
+  for (final c in ranked) {
+    if (primaries.any(
+      (o) => o.path == c.path && (o.line - c.line).abs() <= lineWindow,
+    )) {
+      continue;
+    }
+    final twin = primaries
+        .where((o) => _isNearDuplicate(o, c, similarity))
+        .firstOrNull;
+    if (twin == null) {
+      primaries.add(c);
+    } else if (!_sharesSameFileSubject(twin, c)) {
+      final list = repeats[twin] ??= [];
+      if (!list.any((r) => r.path == c.path)) {
+        list.add(c.withComment('Same here.'));
+      }
+    }
+  }
+  return [
+    for (final c in primaries) ...[c, ...?repeats[c]],
+  ];
+}
+
+/// Whether [c] repeats the higher-ranked [primary].
+bool _isNearDuplicate(
+  CriticComment primary,
+  CriticComment c,
+  double similarity,
+) {
+  if (_sharesSameFileSubject(primary, c) &&
+      _contentWords(primary.comment)
+              .intersection(_contentWords(c.comment))
+              .length >=
+          3) {
+    return true;
+  }
+  final threshold = primary.path == c.path ? similarity * 0.85 : similarity;
+  return textSimilarity(primary.comment, c.comment) >= threshold;
+}
+
+/// Phrases that make a `major` comment block the review as scope creep.
+const _blockingScopeCreepPhrases = [
+  ..._scopeCreepPhrases,
+  'new test file',
+  'why a new file',
+];
+
+bool _isBlockingScopeCreep(CriticComment c) {
+  final lower = c.comment.toLowerCase();
+  return c.severityRank >= severities.indexOf('major') &&
+      _blockingScopeCreepPhrases.any(lower.contains);
 }
 
 /// The review verdict for a pass with the given maximum comment severity.
