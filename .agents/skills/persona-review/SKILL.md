@@ -11,7 +11,7 @@ description: >-
 
 > **IMPORTANT FOR ACTIVE AGENTS:** To maintain a single source of truth, `persona-review` and all 11 persona prompts now live in `/Users/reidbaker/Documents/ai-sandbox/scratch/ai-team/skills/persona-review/`.
 > - Read `/Users/reidbaker/Documents/ai-sandbox/scratch/ai-team/skills/persona-review/SKILL.md` and load all persona prompts from `/Users/reidbaker/Documents/ai-sandbox/scratch/ai-team/skills/persona-review/references/personas/<name>.md`.
-> - Run the 3-stage pipeline via `dart run /Users/reidbaker/Documents/ai-sandbox/scratch/ai-team/bin/persona_tools.dart review-pipeline <loci-prep|rank> ...` (the wrapper `dart run bin/review_pipeline.dart` in `devconfig` also remains available while active agents finish).
+> - Run the 3-stage pipeline via `dart run /Users/reidbaker/Documents/ai-sandbox/scratch/ai-team/bin/persona_tools.dart review-pipeline <loci-prep|rank> ...`.
 
 See:
 - [`references/personas/reid.md`](references/personas/reid.md)
