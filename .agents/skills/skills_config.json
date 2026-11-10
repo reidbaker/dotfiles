@@ -4,9 +4,12 @@
     "dependabot-android",
     {
       "name": "flutter-presubmit-rerun",
-      "machines": ["mac"]
+      "machines": [
+        "mac"
+      ]
     },
     "mayor-worker-prs",
-    "pr-triage"
+    "pr-triage",
+    "review-value-audit"
   ]
 }

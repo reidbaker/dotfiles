@@ -6,8 +6,8 @@ trigger: always_on
 
 - Before you tell the user that the first draft of a PR is ready for their review, run `persona-review` and `adversarial-review` on it without asking, and fix or report what they find.
 - After the first draft, decide yourself whether a change needs another review pass, based on its size and risk.
-- Log every review pass and its outcome so the user can judge whether the review skills are worth their cost. Append one JSON object per line to `~/.agents/review-log.jsonl` (create it if missing):
-  - After a review pass: `{"event":"review","date":"<ISO date>","repo":"<owner/repo>","pr":<n>,"sha":"<head sha>","skill":"persona-review|adversarial-review","findings":<n>,"applied":<n>,"declined":<n>,"summary":"<one line on what changed>"}`.
-  - When the user asks you to undo a change that a review finding caused: `{"event":"undo","date":"...","repo":"...","pr":<n>,"skill":"...","summary":"<what was undone and why>"}`.
-  - When you see the PR merge: `{"event":"merged","date":"...","repo":"...","pr":<n>,"human_review_rounds":<n>,"human_comments":<n>}`, counting rounds and comments from human reviewers after you first called it ready.
+- Log every review pass so the `review-value-audit` skill can later judge whether the review skills pay off. Append one JSON object per line to `~/.agents/review-log.jsonl` (create it if missing):
+  - After you apply a review pass: `{"event":"review","date":"<ISO date>","repo":"<owner/repo>","pr":<n>,"skill":"persona-review|adversarial-review","reviewed_sha":"<sha reviewed>","fix_shas":["<commits that applied findings>"],"findings":<n>,"applied":<n>,"declined":<n>,"summary":"<one line per applied finding>"}`.
+  - When the user asks you to undo or rework something a review finding caused: `{"event":"undo","date":"...","repo":"...","pr":<n>,"skill":"...","finding":"<the finding>","user_words":"<the user's request, quoted>","summary":"<what you undid>"}`.
+  - When you call a PR ready for the user: `{"event":"ready","date":"...","repo":"...","pr":<n>,"sha":"<head sha>"}`.
 - Never put secrets or internal hostnames in the log.
