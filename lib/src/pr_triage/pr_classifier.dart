@@ -47,6 +47,7 @@ class PrClassifier {
     final candidates = <TriagedItem>[
       ?_checkReadyToMerge(pr, ci, config, days),
       ?_checkWaitingCicd(pr, ci, config, days),
+      ?_checkAwaitingOwnReview(pr, ci, config, days),
       ?_checkFlakyCi(pr, ci, config, days),
       ?_checkMinorFeedback(pr, config, days),
       ?_checkFailingCi(pr, ci, config, days),
@@ -260,7 +261,7 @@ class PrClassifier {
     return null;
   }
 
-  /// Tiers 3 and 10. Drafts are handled in one place so their reason string
+  /// Tiers 3 and 11. Drafts are handled in one place so their reason string
   /// can carry the CI and review-thread state instead of discarding it.
   TriagedItem _draftItem(PrItem pr, _PrCi ci, TriageConfig config, int days) {
     final blockers = _activeBlockingReviews(pr);
@@ -307,7 +308,7 @@ class PrClassifier {
     return parts.isEmpty ? const <String>['work in progress'] : parts;
   }
 
-  /// Tier 4.
+  /// Tier 5.
   TriagedItem? _checkFlakyCi(
     PrItem pr,
     _PrCi ci,
@@ -326,7 +327,7 @@ class PrClassifier {
     );
   }
 
-  /// Tier 5.
+  /// Tier 6.
   TriagedItem? _checkMinorFeedback(PrItem pr, TriageConfig config, int days) {
     final open = _openThreads(pr, config);
     if (!pr.isApproved || open == 0) return null;
@@ -339,7 +340,7 @@ class PrClassifier {
     );
   }
 
-  /// Tier 6.
+  /// Tier 7.
   TriagedItem? _checkFailingCi(
     PrItem pr,
     _PrCi ci,
@@ -358,7 +359,7 @@ class PrClassifier {
     );
   }
 
-  /// Tier 7.
+  /// Tier 8.
   TriagedItem? _checkSubstantialFeedback(
     PrItem pr,
     TriageConfig config,
@@ -381,7 +382,43 @@ class PrClassifier {
     );
   }
 
-  /// Tiers 8 and 9.
+  /// Tier 4: a non-draft agent PR (or cross-account PR requesting you) with
+  /// clean CI, no merge conflicts, and no open threads that still awaits your
+  /// approval.
+  TriagedItem? _checkAwaitingOwnReview(
+    PrItem pr,
+    _PrCi ci,
+    TriageConfig config,
+    int days,
+  ) {
+    final ciReady = ci.isPassing || pr.hasNoChecksConfigured;
+    if (pr.isMergeBlocked || !ciReady || _approvedByMe(pr, config)) {
+      return null;
+    }
+    if (_activeBlockingReviews(pr).isNotEmpty || _openThreads(pr, config) > 0) {
+      return null;
+    }
+    if (!_needsOwnReview(pr, config)) return null;
+    return _buildItem(
+      pr: pr,
+      queue: QueueType.myWork,
+      tier: MyWorkTier.awaitingOwnReview,
+      reason: ci.isPassing
+          ? 'Authored by ${pr.author}, CI green, awaiting your review'
+          : 'Authored by ${pr.author}, no CI configured, awaiting your review',
+      days: days,
+    );
+  }
+
+  bool _needsOwnReview(PrItem pr, TriageConfig config) {
+    if (config.isAgentAccount(pr.author)) return true;
+    return pr.requestedReviewers.any(
+      (r) =>
+          config.isMyAccount(r) && r.toLowerCase() != pr.author.toLowerCase(),
+    );
+  }
+
+  /// Tiers 9 and 10.
   TriagedItem _reviewAgeItem(PrItem pr, TriageConfig config, int days) {
     final stalled = days >= config.staleReviewBusinessDays;
     return _buildItem(

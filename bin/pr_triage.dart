@@ -80,6 +80,10 @@ ArgParser _buildParser() => ArgParser()
     'ignore-author',
     help: '--threads: login to treat like the agent (repeatable).',
   )
+  ..addMultiOption(
+    'author',
+    help: '--threads: filter repository PRs by author login (repeatable).',
+  )
   ..addFlag('json', negatable: false, help: '--threads: print JSON.')
   ..addFlag('help', abbr: 'h', negatable: false, help: 'Show usage.');
 
@@ -173,9 +177,33 @@ Future<int> runThreads(ArgResults opts, {ThreadScanner? scanner}) async {
 }
 
 ThreadScanOptions? _threadOptions(ArgResults opts, DateTime now) {
-  final repo = opts.option('repo');
+  final rawPrs = opts.multiOption('pr');
+  var repo = opts.option('repo');
+  final prNumbers = <int>{};
+  for (final raw in rawPrs) {
+    final trimmed = raw.trim();
+    final intOnly = int.tryParse(trimmed);
+    if (intOnly != null) {
+      prNumbers.add(intOnly);
+      continue;
+    }
+    try {
+      final spec = PrSpec.parse(trimmed);
+      repo ??= spec.repo;
+      if (spec.repo.toLowerCase() != repo.toLowerCase()) {
+        stderr.writeln('--threads --pr entries must belong to one repository.');
+        return null;
+      }
+      prNumbers.add(spec.number);
+    } on FormatException catch (e) {
+      stderr.writeln(e.message);
+      return null;
+    }
+  }
   if (repo == null || !RegExp(r'^[\w.-]+/[\w.-]+$').hasMatch(repo)) {
-    stderr.writeln('--threads requires --repo owner/name.');
+    stderr.writeln(
+      '--threads requires --repo owner/name (or --pr owner/repo#N).',
+    );
     return null;
   }
   final merged = parseDuration(opts.option('include-merged')!);
@@ -183,21 +211,25 @@ ThreadScanOptions? _threadOptions(ArgResults opts, DateTime now) {
     stderr.writeln('--include-merged must be a duration such as 2d or 12h.');
     return null;
   }
-  final rawSince = opts.option('since');
-  DateTime? since;
-  if (rawSince != null) {
-    final d = parseDuration(rawSince);
-    since = d != null ? now.subtract(d) : DateTime.tryParse(rawSince);
-    if (since == null) {
-      stderr.writeln('--since must be an ISO time or a duration such as 6h.');
-      return null;
-    }
-  }
+  final since = _parseSince(opts.option('since'), now);
+  if (opts.option('since') != null && since == null) return null;
   return ThreadScanOptions(
     repo: repo,
     agent: opts.option('agent'),
     since: since,
     includeMerged: merged,
     ignoreAuthors: opts.multiOption('ignore-author').toSet(),
+    authors: opts.multiOption('author').toSet(),
+    prNumbers: prNumbers,
   );
+}
+
+DateTime? _parseSince(String? rawSince, DateTime now) {
+  if (rawSince == null) return null;
+  final d = parseDuration(rawSince);
+  final parsed = d != null ? now.subtract(d) : DateTime.tryParse(rawSince);
+  if (parsed == null) {
+    stderr.writeln('--since must be an ISO time or a duration such as 6h.');
+  }
+  return parsed;
 }

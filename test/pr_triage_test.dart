@@ -212,6 +212,35 @@ cla_missing_labels:
       expect(kConfig.isNonPrCheck('tree-status-lint'), isFalse);
       expect(kConfig.isNonPrCheck('Linux tree status'), isFalse);
     });
+
+    test('summarizes large team_members lists in toJson', () {
+      final smallJson = kConfig.toJson();
+      expect(smallJson['team_members_count'], 2);
+      expect(smallJson['team_members'], ['gmackall', 'camsim99']);
+
+      final large = kConfig.withTeamMembers([
+        for (var i = 0; i < 30; i++) 'member-$i',
+      ]);
+      final largeJson = large.toJson();
+      expect(largeJson['team_members_count'], 32);
+      expect(largeJson.containsKey('team_members'), isFalse);
+    });
+
+    test('identifies agent accounts by explicit config or -agent suffix', () {
+      expect(kConfig.isAgentAccount('reidbaker-agent'), isTrue);
+      expect(kConfig.isAgentAccount('ReidBaker-Agent'), isTrue);
+      expect(kConfig.isAgentAccount('reidbaker'), isFalse);
+
+      final explicit = TriageConfig.fromYamlString('''
+accounts:
+  - reidbaker
+  - helper-bot
+agent_accounts:
+  - helper-bot
+''');
+      expect(explicit.isAgentAccount('helper-bot'), isTrue);
+      expect(explicit.isAgentAccount('reidbaker'), isFalse);
+    });
   });
 
   group('TriageConfig repository scoping', () {
@@ -693,6 +722,50 @@ cla_missing_labels:
           kConfig,
         );
         expect(item.tier, isNot(MyWorkTier.readyToMerge));
+      });
+    });
+
+    group('agent PR awaiting own review', () {
+      test('ranks green unapproved agent PR above in-review tiers', () {
+        final item = classifier().classifyMyWork(
+          pr(
+            author: 'reidbaker-agent',
+            reviewDecision: 'REVIEW_REQUIRED',
+            ciStatus: CiStatus.passing,
+            totalCheckCount: 6,
+            createdAt: kNow.subtract(const Duration(days: 7)),
+          ),
+          kConfig,
+        );
+        expect(item.tier, MyWorkTier.awaitingOwnReview);
+        expect(item.actionPrompt, '[Action: Review & approve agent PR]');
+      });
+
+      test('stays in-review while CI is still pending', () {
+        final item = classifier().classifyMyWork(
+          pr(
+            author: 'reidbaker-agent',
+            reviewDecision: 'REVIEW_REQUIRED',
+            ciStatus: CiStatus.pending,
+            totalCheckCount: 6,
+          ),
+          kConfig,
+        );
+        expect(item.tier, MyWorkTier.freshInReview);
+      });
+
+      test('does not flag human-authored PR awaiting external reviewers', () {
+        final item = classifier().classifyMyWork(
+          pr(
+            author: 'reidbaker',
+            reviewDecision: 'REVIEW_REQUIRED',
+            ciStatus: CiStatus.passing,
+            totalCheckCount: 6,
+            requestedReviewers: ['gmackall'],
+          ),
+          kConfig,
+        );
+        expect(item.tier, MyWorkTier.freshInReview);
       });
     });
 

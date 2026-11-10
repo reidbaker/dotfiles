@@ -73,6 +73,11 @@ class FakeGh {
 
   Future<ProcessResult> call(String exe, List<String> args) async {
     calls.add(args);
+    if (args.first == 'pr' && args[1] == 'view') {
+      final n = int.parse(args[2]);
+      final found = [...open, ...merged].firstWhere((p) => p['number'] == n);
+      return _ok(jsonEncode(found));
+    }
     if (args.first == 'pr') {
       return _ok(jsonEncode(open));
     }
@@ -127,11 +132,16 @@ class FakeGh {
   ProcessResult _ok(String out) => ProcessResult(0, 0, out, '');
 }
 
-Map<String, Object?> prRef(int n, {String? mergedAt}) => {
+Map<String, Object?> prRef(
+  int n, {
+  String? mergedAt,
+  String author = 'reidbaker-agent',
+}) => {
   'number': n,
   'title': 'PR $n',
   'url': 'https://github.com/$kRepo/pull/$n',
   'mergedAt': mergedAt,
+  'author': {'login': author},
 };
 
 Future<ThreadScanResult> scan(
@@ -300,6 +310,7 @@ String mergedPage(List<(int, String, String)> prs, {String? next}) =>
 
 void main() {
   mergedFollowUpTests();
+  scopingAndConcurrencyTests();
 
   test('pages merged PRs until updatedAt passes the cutoff', () async {
     // kNow is 2026-10-22T15:00Z, so the default 2d cutoff is 10-20T15:00Z.
@@ -480,5 +491,95 @@ void main() {
     expect(parseDuration('2d'), const Duration(days: 2));
     expect(parseDuration('36h'), const Duration(hours: 36));
     expect(parseDuration('2x'), isNull);
+  });
+}
+
+class _ConcurrencyMeter {
+  _ConcurrencyMeter(this._base);
+
+  final FakeGh _base;
+  int active = 0;
+  int peak = 0;
+
+  static bool _isPrGraphql(List<String> args) =>
+      args.length > 1 &&
+      args[1] == 'graphql' &&
+      args.any((a) => a.startsWith('number='));
+
+  Future<ProcessResult> call(String exe, List<String> args) async {
+    final tracked = _isPrGraphql(args);
+    if (tracked) {
+      active++;
+      if (active > peak) peak = active;
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+    }
+    try {
+      return await _base.call(exe, args);
+    } finally {
+      if (tracked) active--;
+    }
+  }
+}
+
+void scopingAndConcurrencyTests() {
+  test('filters open and merged PRs by authors case-insensitively', () async {
+    final gh = FakeGh(
+      open: [
+        prRef(1, author: 'reidbaker-agent'),
+        prRef(2, author: 'someone'),
+      ],
+      merged: [
+        prRef(3, mergedAt: '2026-10-22T10:00:00Z', author: 'ReidBaker-Agent'),
+        prRef(4, mergedAt: '2026-10-22T10:00:00Z', author: 'someone'),
+      ],
+    );
+    final result = await ThreadScanner(runner: gh.call, clock: () => kNow).scan(
+      const ThreadScanOptions(
+        repo: kRepo,
+        agent: 'reidbaker-agent',
+        authors: {'reidbaker-agent'},
+      ),
+    );
+    expect([for (final p in result.open) p.number], [1]);
+    expect([for (final p in result.merged) p.number], [3]);
+  });
+
+  test('scans only explicit prNumbers without listing repo PRs', () async {
+    final gh = FakeGh(
+      open: [prRef(10), prRef(20)],
+      threadPages: {
+        20: {
+          '': threadPage([
+            thread([comment(99, 'lrhn', '2026-10-22T12:00:00Z')]),
+          ]),
+        },
+      },
+    );
+    final result = await ThreadScanner(runner: gh.call, clock: () => kNow).scan(
+      const ThreadScanOptions(
+        repo: kRepo,
+        agent: 'reidbaker-agent',
+        prNumbers: {20},
+      ),
+    );
+    expect([for (final p in result.open) p.number], [20]);
+    expect(result.open.single.items.single.id, 99);
+    expect(gh.calls.any((c) => c.length > 1 && c[1] == 'list'), isFalse);
+  });
+
+  test('caps concurrent PR scans at maxConcurrency and keeps order', () async {
+    final meter = _ConcurrencyMeter(
+      FakeGh(open: [for (var i = 1; i <= 6; i++) prRef(i)]),
+    );
+    final result = await ThreadScanner(runner: meter.call, clock: () => kNow)
+        .scan(
+          const ThreadScanOptions(
+            repo: kRepo,
+            agent: 'reidbaker-agent',
+            maxConcurrency: 2,
+          ),
+        );
+    expect(meter.peak, lessThanOrEqualTo(2));
+    expect([for (final p in result.open) p.number], [1, 2, 3, 4, 5, 6]);
   });
 }

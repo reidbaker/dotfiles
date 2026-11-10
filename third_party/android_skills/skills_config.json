@@ -2,7 +2,6 @@
   "source": "https://github.com/google/android-cli.git",
   "license": "Apache-2.0",
   "skills": [
-    "agp-9-upgrade",
-    "android-cli"
+    "agp-9-upgrade"
   ]
 }

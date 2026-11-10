@@ -36,47 +36,52 @@ enum MyWorkTier implements TriageTier {
     'Draft Ready for Review (CI Green)',
     '[Action: Mark ready for review & notify reviewers]',
   ),
-  flakyCiFailure(
+  awaitingOwnReview(
     4,
+    'Agent PR Ready for Your Review',
+    '[Action: Review & approve agent PR]',
+  ),
+  flakyCiFailure(
+    5,
     'Failing CI (Flaky candidate)',
     '[Action: Investigate/re-run flaky CI]',
   ),
   minorFeedbackWithApproval(
-    5,
+    6,
     'Approved with Minor Comments',
     '[Action: Address minor comments & land]',
   ),
   failingCiWorkRelated(
-    6,
+    7,
     'Failing CI (Needs Code Fix)',
     '[Action: Fix failing tests/lints]',
   ),
   substantialFeedback(
-    7,
+    8,
     'Substantial Review Feedback / Changes Requested',
     '[Action: Address review feedback]',
   ),
   stalledInReview(
-    8,
+    9,
     'Stalled in Review (>= threshold business days)',
     '[Action: Ping reviewer(s)]',
   ),
   freshInReview(
-    9,
+    10,
     'In Review (within normal window)',
     '[Action: Awaiting review]',
   ),
   draft(
-    10,
+    11,
     'Active Draft / WIP (Primary Repo)',
     '[Action: Resume development / Work in progress]',
   ),
   nonPrimaryRepo(
-    11,
+    12,
     'Repository Not In primary_orgs',
     '[Action: Low urgency - add repo to primary_orgs to promote]',
   ),
-  forkOrPoc(12, 'Personal Fork / POC', '[Action: POC / Fork - Low urgency]');
+  forkOrPoc(13, 'Personal Fork / POC', '[Action: POC / Fork - Low urgency]');
 
   const MyWorkTier(this.rank, this.displayName, this.defaultAction);
 

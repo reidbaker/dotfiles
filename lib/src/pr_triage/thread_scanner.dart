@@ -128,6 +128,9 @@ class ThreadScanOptions {
     this.since,
     this.includeMerged = const Duration(days: 2),
     this.ignoreAuthors = const {},
+    this.authors = const {},
+    this.prNumbers = const {},
+    this.maxConcurrency = 8,
   });
 
   /// `owner/name`.
@@ -146,6 +149,15 @@ class ThreadScanOptions {
   /// Logins treated like the agent: their comments are hidden and, as the
   /// last comment of a thread, do not count as an answer by a reviewer.
   final Set<String> ignoreAuthors;
+
+  /// Optional PR author filter (case-insensitive) to scope large repositories.
+  final Set<String> authors;
+
+  /// Optional explicit PR numbers to scan instead of listing all repo PRs.
+  final Set<int> prNumbers;
+
+  /// Maximum number of PRs scanned concurrently (`gh` subprocess limit).
+  final int maxConcurrency;
 }
 
 /// Lists reviewer feedback that has not been answered by the agent, across
@@ -172,10 +184,28 @@ class ThreadScanner {
     } on Object catch (e) {
       return ThreadScanResult(prs: const [], failures: ['listing PRs: $e']);
     }
-    final results = await Future.wait([
-      for (final ref in refs) _scanPrSafely(ref, options, failures),
-    ]);
+    final results = await _scanBounded(refs, options, failures);
     return ThreadScanResult(prs: [...results.nonNulls], failures: failures);
+  }
+
+  Future<List<PrFeedback?>> _scanBounded(
+    List<_PrRef> refs,
+    ThreadScanOptions options,
+    List<String> failures,
+  ) async {
+    final results = List<PrFeedback?>.filled(refs.length, null);
+    final limit = options.maxConcurrency < 1 ? 1 : options.maxConcurrency;
+    var nextIndex = 0;
+    Future<void> worker() async {
+      while (nextIndex < refs.length) {
+        final idx = nextIndex++;
+        results[idx] = await _scanPrSafely(refs[idx], options, failures);
+      }
+    }
+
+    final workerCount = refs.length < limit ? refs.length : limit;
+    await Future.wait([for (var i = 0; i < workerCount; i++) worker()]);
+    return results;
   }
 
   Future<PrFeedback?> _scanPrSafely(
@@ -192,19 +222,53 @@ class ThreadScanner {
   }
 
   Future<List<_PrRef>> _listPrs(ThreadScanOptions options) async {
+    if (options.prNumbers.isNotEmpty) {
+      return _fetchExplicitPrRefs(options.repo, options.prNumbers);
+    }
+    final authorSet = options.authors.map((a) => a.toLowerCase()).toSet();
+    final fields = authorSet.isEmpty
+        ? 'number,title,url,mergedAt'
+        : 'number,title,url,mergedAt,author';
     final open = await _ghJson([
       'pr', 'list', '-R', options.repo, '--state', 'open', //
-      '--limit', '1000', '--json', 'number,title,url,mergedAt',
+      '--limit', '1000', '--json', fields,
     ]);
     final cutoff = _clock().toUtc().subtract(options.includeMerged);
     final refs = <int, _PrRef>{
       for (final raw in open as List)
-        (raw as Map<String, dynamic>)['number'] as int: _PrRef.fromJson(raw),
+        if (_matchesAuthor(raw as Map<String, dynamic>, authorSet))
+          raw['number'] as int: _PrRef.fromJson(raw),
     };
-    for (final ref in await _mergedSince(options.repo, cutoff)) {
+    for (final ref in await _mergedSince(options.repo, cutoff, authorSet)) {
       refs[ref.number] = ref;
     }
     return refs.values.toList()..sort((a, b) => a.number - b.number);
+  }
+
+  Future<List<_PrRef>> _fetchExplicitPrRefs(
+    String repo,
+    Set<int> numbers,
+  ) async {
+    final sorted = numbers.toList()..sort();
+    final refs = <_PrRef>[];
+    for (final num in sorted) {
+      final raw = await _ghJson([
+        'pr',
+        'view',
+        '$num',
+        '-R',
+        repo,
+        '--json',
+        'number,title,url,mergedAt',
+      ]);
+      refs.add(_PrRef.fromJson(raw as Map<String, dynamic>));
+    }
+    return refs;
+  }
+
+  bool _matchesAuthor(Map<String, dynamic> raw, Set<String> authorSet) {
+    if (authorSet.isEmpty) return true;
+    return authorSet.contains(_login(raw['author']).toLowerCase());
   }
 
   /// Lists PRs merged at or after [cutoff].
@@ -213,7 +277,11 @@ class ThreadScanner {
   /// is eventually consistent and was seen returning no results at all.
   /// Merging updates a PR, so once a page reaches `updatedAt < cutoff` no
   /// later page can hold a PR merged after it.
-  Future<List<_PrRef>> _mergedSince(String repo, DateTime cutoff) async {
+  Future<List<_PrRef>> _mergedSince(
+    String repo,
+    DateTime cutoff, [
+    Set<String> authorSet = const {},
+  ]) async {
     final [owner, name] = repo.split('/');
     final refs = <_PrRef>[];
     String? cursor;
@@ -231,7 +299,8 @@ class ThreadScanner {
       final nodes = (conn['nodes'] as List).cast<Map<String, dynamic>>();
       refs.addAll([
         for (final n in nodes)
-          if (!DateTime.parse(n['mergedAt'] as String).isBefore(cutoff))
+          if (!DateTime.parse(n['mergedAt'] as String).isBefore(cutoff) &&
+              _matchesAuthor(n, authorSet))
             _PrRef.fromJson(n),
       ]);
       final info = conn['pageInfo'] as Map;
@@ -250,7 +319,7 @@ query($owner: String!, $name: String!, $cursor: String) {
     pullRequests(states: MERGED, first: 100, after: $cursor,
         orderBy: {field: UPDATED_AT, direction: DESC}) {
       pageInfo { hasNextPage endCursor }
-      nodes { number title url mergedAt updatedAt }
+      nodes { number title url mergedAt updatedAt author { login } }
     }
   }
 }''';

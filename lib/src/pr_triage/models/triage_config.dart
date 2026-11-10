@@ -119,6 +119,7 @@ class PrOverride {
 class TriageConfig {
   const TriageConfig({
     required this.accounts,
+    this.agentAccounts = const [],
     this.teamMembers = const [],
     this.teamOrgs = const [],
     this.primaryOrgs = const ['flutter', 'dart-lang'],
@@ -172,6 +173,7 @@ class TriageConfig {
 
     return TriageConfig(
       accounts: accounts,
+      agentAccounts: _stringList(map, ['agent_accounts', 'agentAccounts']),
       teamMembers: _stringList(map, ['team_members', 'teamMembers']),
       teamOrgs: _stringList(map, ['team_orgs', 'teamOrgs']),
       primaryOrgs: primaryOrgs.isEmpty
@@ -208,6 +210,11 @@ class TriageConfig {
   }
 
   final List<String> accounts;
+
+  /// Subset of [accounts] operated by automated agents (for example
+  /// `reidbaker-agent`). When omitted, defaults to any entry in [accounts]
+  /// ending in `-agent`.
+  final List<String> agentAccounts;
 
   /// Explicit teammate logins. Combined with logins resolved from [teamOrgs].
   final List<String> teamMembers;
@@ -264,6 +271,7 @@ class TriageConfig {
     }.toList()..sort();
     return TriageConfig(
       accounts: accounts,
+      agentAccounts: agentAccounts,
       teamMembers: merged,
       teamOrgs: teamOrgs,
       primaryOrgs: primaryOrgs,
@@ -303,6 +311,17 @@ class TriageConfig {
   /// Returns true if [username] is one of the configured user accounts.
   bool isMyAccount(String username) {
     return accounts.any((a) => a.toLowerCase() == username.toLowerCase());
+  }
+
+  /// Returns true if [username] is a configured agent account.
+  bool isAgentAccount(String username) {
+    final lower = username.toLowerCase();
+    if (agentAccounts.isNotEmpty) {
+      return agentAccounts.any((a) => a.toLowerCase() == lower);
+    }
+    return accounts.length > 1 &&
+        isMyAccount(username) &&
+        lower.endsWith('-agent');
   }
 
   /// Returns true if [username] is a known teammate.
@@ -484,7 +503,9 @@ class TriageConfig {
 
   Map<String, dynamic> toJson() => {
     'accounts': accounts,
-    'team_members': teamMembers,
+    if (agentAccounts.isNotEmpty) 'agent_accounts': agentAccounts,
+    'team_members_count': teamMembers.length,
+    if (teamMembers.length <= 25) 'team_members': teamMembers,
     'team_orgs': teamOrgs,
     'primary_orgs': primaryOrgs,
     'primary_repos': primaryRepos,
