@@ -14,6 +14,7 @@
 - **Sync System**: `dart run bin/sync_agents.dart`
 
 ## Hard Rules
+- Write all skill CLIs, helpers, and scripts in Dart (never Python or bash). Exceptions are rare and require a hard tool constraint where Dart cannot execute (for example, Jetski's `run_workflow` tool, which only runs Python orchestration scripts, or macOS `osascript` AppleScript bridges).
 - All Dart code must pass `dart analyze --fatal-infos` with zero issues.
 - All Dart code must maintain cognitive complexity <= 15 per declaration.
 - Keep static context dense and minimal; procedural task knowledge belongs in dynamic skills (`SKILL.md`).
