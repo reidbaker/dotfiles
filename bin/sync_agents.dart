@@ -4,10 +4,16 @@ import 'dart:io';
 
 import 'package:args/args.dart';
 import 'package:dotfiles/agent_syncer.dart';
+import 'package:dotfiles/machine_selector.dart';
 import 'package:path/path.dart' as p;
 
-void main(List<String> arguments) {
-  final parser = ArgParser()
+const List<String> _defaultExternalRoots = [
+  '~/Documents/ai-sandbox/scratch/ai-team/skills',
+  '~/.gemini/config/external_skills',
+];
+
+ArgParser _buildParser() {
+  return ArgParser()
     ..addFlag('help', abbr: 'h', negatable: false, help: 'Show this help.')
     ..addFlag(
       'dry-run',
@@ -26,8 +32,21 @@ void main(List<String> arguments) {
       'home-dir',
       help: 'Path to user home directory.',
       defaultsTo: Platform.environment['HOME'],
+    )
+    ..addOption(
+      'machine',
+      help: 'Override detected machine tag(s), comma-separated (e.g. mac,cloudtop).',
+      defaultsTo: Platform.environment['AGENT_SYNC_MACHINE'],
+    )
+    ..addMultiOption(
+      'external-root',
+      help: 'Additional skill root directory with an optional skills_config.json.',
+      defaultsTo: _defaultExternalRoots,
     );
+}
 
+void main(List<String> arguments) {
+  final parser = _buildParser();
   final ArgResults results;
   try {
     results = parser.parse(arguments);
@@ -38,14 +57,11 @@ void main(List<String> arguments) {
   }
 
   if (results['help'] as bool) {
-    print('Sync agent skills and personas into ~/.agents and .gemini/skills\n');
+    print('Sync agent skills, rules, and personas into ~/.agents and ~/.gemini\n');
     print('Usage: dart run bin/sync_agents.dart [options]\n');
     print(parser.usage);
     exit(0);
   }
-
-  final dryRun = results['dry-run'] as bool;
-  final quiet = results['quiet'] as bool;
 
   final homeDir = results['home-dir'] as String?;
   if (homeDir == null || homeDir.isEmpty) {
@@ -53,25 +69,32 @@ void main(List<String> arguments) {
     exit(1);
   }
 
-  final String dotfilesDir;
-  if (results['dotfiles-dir'] != null) {
-    dotfilesDir = p.canonicalize(results['dotfiles-dir'] as String);
-  } else {
-    // Infer root from script location: bin/sync_agents.dart -> repo root
-    final scriptPath = Platform.script.toFilePath();
-    dotfilesDir = p.canonicalize(p.join(p.dirname(scriptPath), '..'));
-  }
+  final dotfilesDir = _resolveDotfilesDir(results['dotfiles-dir'] as String?);
+  final selector = MachineSelector.detect(
+    isMacOS: Platform.isMacOS,
+    isLinux: Platform.isLinux,
+    overrideTag: results['machine'] as String?,
+  );
 
   final syncer = AgentSyncer(
     dotfilesDir: dotfilesDir,
     homeDir: homeDir,
-    dryRun: dryRun,
-    logger: quiet ? null : print,
+    dryRun: results['dry-run'] as bool,
+    logger: (results['quiet'] as bool) ? null : print,
+    machineSelector: selector,
+    externalSkillRoots: results['external-root'] as List<String>,
   );
 
   final result = syncer.syncAll();
-
-  if (!quiet) {
+  if (!(results['quiet'] as bool)) {
     print('\nSummary: ${result.totalLinked} link(s) created/updated.');
   }
+}
+
+String _resolveDotfilesDir(String? rawDir) {
+  if (rawDir != null) {
+    return p.canonicalize(rawDir);
+  }
+  final scriptPath = Platform.script.toFilePath();
+  return p.canonicalize(p.join(p.dirname(scriptPath), '..'));
 }

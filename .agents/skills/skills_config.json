@@ -1,0 +1,12 @@
+{
+  "skills": [
+    "adversarial-review",
+    "dependabot-android",
+    {
+      "name": "flutter-presubmit-rerun",
+      "machines": ["mac"]
+    },
+    "mayor-worker-prs",
+    "pr-triage"
+  ]
+}

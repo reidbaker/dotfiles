@@ -6,16 +6,22 @@ class SyncResult {
     required this.customSkillActions,
     required this.thirdPartySkillActions,
     required this.agentActions,
+    this.ruleActions = const [],
+    this.externalSkillActions = const [],
   });
 
   final List<SyncAction> customSkillActions;
   final List<SyncAction> thirdPartySkillActions;
   final List<SyncAction> agentActions;
+  final List<SyncAction> ruleActions;
+  final List<SyncAction> externalSkillActions;
 
   List<SyncAction> get allActions => [
     ...customSkillActions,
     ...thirdPartySkillActions,
+    ...externalSkillActions,
     ...agentActions,
+    ...ruleActions,
   ];
 
   int get totalLinked => allActions

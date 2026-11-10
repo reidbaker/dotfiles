@@ -1,4 +1,5 @@
 import 'package:dotfiles/agent_syncer.dart';
+import 'package:dotfiles/machine_selector.dart';
 import 'package:dotfiles/sync_action.dart';
 import 'package:file/file.dart';
 import 'package:file/memory.dart';
@@ -48,6 +49,8 @@ void main() {
     bool dryRun = false,
     void Function(String)? logger,
     FileSystem? fileSystem,
+    MachineSelector? machineSelector,
+    List<String> externalSkillRoots = const [],
   }) {
     return AgentSyncer(
       fs: fileSystem ?? fs,
@@ -55,6 +58,9 @@ void main() {
       homeDir: homeDir,
       dryRun: dryRun,
       logger: logger,
+      machineSelector:
+          machineSelector ?? const MachineSelector(activeTags: {'mac'}),
+      externalSkillRoots: externalSkillRoots,
     );
   }
 
@@ -204,6 +210,127 @@ void main() {
       expectSymlink(
         userSkillLink('custom-skill'),
         '$dotfilesDir/.agents/skills/custom-skill',
+      );
+    });
+
+    test('unlists third-party skills omitted from skills_config.json while retaining source', () {
+      createThirdPartySkill('gspencergoog_skills', 'api-review');
+      createThirdPartySkill('gspencergoog_skills', 'code-review');
+
+      final syncer = createSyncer();
+      syncer.syncAll();
+
+      expect(userSkillLink('code-review').existsSync(), isTrue);
+      expect(geminiSkillLink('code-review').existsSync(), isTrue);
+
+      fs
+          .file(
+            '$dotfilesDir/third_party/gspencergoog_skills/skills_config.json',
+          )
+          .writeAsStringSync('{"skills": ["api-review"]}');
+
+      syncer.syncAll();
+
+      expect(userSkillLink('api-review').existsSync(), isTrue);
+      expect(geminiSkillLink('api-review').existsSync(), isTrue);
+      expect(userSkillLink('code-review').existsSync(), isFalse);
+      expect(geminiSkillLink('code-review').existsSync(), isFalse);
+      expect(
+        fs
+            .directory(
+              '$dotfilesDir/third_party/gspencergoog_skills/skills/code-review',
+            )
+            .existsSync(),
+        isTrue,
+      );
+    });
+
+    test('filters machine-specific skills and rules while preserving foreign links', () {
+      createCustomSkill('mac-only-skill');
+      createCustomSkill('cloudtop-only-skill');
+      fs
+          .file('$dotfilesDir/.agents/skills/skills_config.json')
+          .writeAsStringSync('''
+{
+  "skills": [
+    "custom-skill",
+    {"name": "mac-only-skill", "machines": ["mac"]},
+    {"name": "cloudtop-only-skill", "machines": ["cloudtop"]}
+  ]
+}
+''');
+
+      fs.directory('$dotfilesDir/.agents/rules').createSync(recursive: true);
+      fs
+          .file('$dotfilesDir/.agents/rules/keep-awake.md')
+          .writeAsStringSync('# mac rule\n');
+      fs
+          .file('$dotfilesDir/.agents/rules/secret-hygiene.md')
+          .writeAsStringSync('# all rule\n');
+      fs
+          .file('$dotfilesDir/.agents/rules/rules_config.json')
+          .writeAsStringSync('''
+{
+  "rules": [
+    {"name": "keep-awake.md", "machines": ["mac"]},
+    "secret-hygiene.md"
+  ]
+}
+''');
+
+      // Foreign link managed outside dotfiles must never be removed.
+      fs.directory('$homeDir/.agents/skills').createSync(recursive: true);
+      fs
+          .link('$homeDir/.agents/skills/foreign-skill')
+          .createSync('/some/external/path');
+
+      // First sync as mac:
+      createSyncer(
+        machineSelector: const MachineSelector(activeTags: {'mac'}),
+      ).syncAll();
+
+      expect(userSkillLink('mac-only-skill').existsSync(), isTrue);
+      expect(userSkillLink('cloudtop-only-skill').existsSync(), isFalse);
+      expect(
+        fs.link('$homeDir/.gemini/config/rules/keep-awake.md').existsSync(),
+        isTrue,
+      );
+      expect(
+        fs.link('$homeDir/.gemini/config/rules/secret-hygiene.md').existsSync(),
+        isTrue,
+      );
+      expect(userSkillLink('foreign-skill').existsSync(), isTrue);
+
+      // Re-sync as cloudtop: mac-only links unlink, cloudtop-only links appear, foreign stays.
+      createSyncer(
+        machineSelector: const MachineSelector(activeTags: {'cloudtop'}),
+      ).syncAll();
+
+      expect(userSkillLink('mac-only-skill').existsSync(), isFalse);
+      expect(userSkillLink('cloudtop-only-skill').existsSync(), isTrue);
+      expect(
+        fs.link('$homeDir/.gemini/config/rules/keep-awake.md').existsSync(),
+        isFalse,
+      );
+      expect(
+        fs.link('$homeDir/.gemini/config/rules/secret-hygiene.md').existsSync(),
+        isTrue,
+      );
+      expect(userSkillLink('foreign-skill').existsSync(), isTrue);
+    });
+
+    test('links external skill roots with ~ expansion', () {
+      createSkillFile('$homeDir/ai-team/skills/persona-review', 'persona-review');
+      fs
+          .file('$homeDir/ai-team/skills/skills_config.json')
+          .writeAsStringSync('{"skills": ["persona-review"]}');
+
+      final syncer = createSyncer(externalSkillRoots: ['~/ai-team/skills']);
+      syncer.syncAll();
+
+      expectSymlink(
+        userSkillLink('persona-review'),
+        '$homeDir/ai-team/skills/persona-review',
       );
     });
   });

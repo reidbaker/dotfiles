@@ -1,0 +1,12 @@
+{
+  "rules": [
+    "flutter-flaky-reruns.md",
+    {
+      "name": "keep-awake.md",
+      "machines": ["mac"]
+    },
+    "pr-comment-replies.md",
+    "release-tracker-checkboxes.md",
+    "secret-hygiene.md"
+  ]
+}
