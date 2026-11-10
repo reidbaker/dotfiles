@@ -5,5 +5,8 @@
 # (e.g. `echo ===`) don't fail with "zsh: == not found".
 unsetopt equals
 
+# Ensure ~/.local/bin (e.g. isolated CLI wrappers) takes precedence on PATH.
+[[ -d "$HOME/.local/bin" ]] && export PATH="$HOME/.local/bin:$PATH"
+
 # Machine-specific or secret overrides (not checked into git).
 [[ -f "$HOME/.zshenv.local" ]] && source "$HOME/.zshenv.local"

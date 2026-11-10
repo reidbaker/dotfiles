@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo_root="$(git rev-parse --show-toplevel)"
+cd "$repo_root"
+
+# 1. Leak scan against staged additions in this public repository.
+added_lines="$(git diff --cached -U0 -- . ':(exclude).githooks/pre-commit' | grep -E '^\+[^+]' || true)"
+if [[ -n "$added_lines" ]]; then
+  leak_pattern='(\.corp\.google\.com|\.googleplex\.com|\.c\.googlers\.com|depot\.code\.corp\.goog|\bgo/[a-z0-9_-]{2,}|/google/src/|/usr/local/google/home/|/Users/[a-zA-Z0-9_-]+)'
+  matches="$(printf '%s\n' "$added_lines" | grep -E "$leak_pattern" || true)"
+  if [[ -n "$matches" ]]; then
+    echo "ERROR: Pre-commit blocked potential internal/host path leak in staged changes:" >&2
+    printf '%s\n' "$matches" | head -n 20 >&2
+    exit 1
+  fi
+fi
+
+# 2. Validate skills with skills_lint.
+dart run skills_lint
+
+# 3. Run Dart analyzer, cognitive complexity, and unit tests when Dart/pubspec files change.
+if git diff --cached --name-only | grep -qE '(\.dart$|pubspec\.yaml$|analysis_options\.yaml$)'; then
+  dart analyze --fatal-infos
+  dart run cognitive_complexity --fail-threshold 15 lib bin test
+  dart test
+fi
