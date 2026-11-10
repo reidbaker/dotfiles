@@ -3,10 +3,15 @@
     "flutter-flaky-reruns.md",
     {
       "name": "keep-awake.md",
-      "machines": ["mac"]
+      "machines": [
+        "mac"
+      ]
     },
     "pr-comment-replies.md",
     "release-tracker-checkboxes.md",
-    "secret-hygiene.md"
+    "secret-hygiene.md",
+    "autonomy-and-decisions.md",
+    "review-before-ready.md",
+    "quota-and-fan-out.md"
   ]
 }
