@@ -28,9 +28,11 @@ cp .agents/skills/pr-triage/resources/config.example.yaml \
    .agents/skills/pr-triage/resources/config.yaml
 ```
 
-Then set `accounts:` to the GitHub logins to triage. Without a config the tool
-falls back to the single authenticated `gh` user and prints a warning to
-stderr.
+Then set `accounts:` to the GitHub logins to triage (and optionally
+`agent_accounts:` when your automated agent logins do not follow the default
+`*-agent` suffix convention; set `agent_accounts: []` to disable that default).
+Without a config the tool falls back to the single authenticated `gh` user and
+prints a warning to stderr.
 
 Resolving `team_orgs` into teammate logins needs a token with the `read:org`
 scope. Without it the run still succeeds, falls back to the static
@@ -236,7 +238,9 @@ re-check every time.
 
 On large repositories such as `flutter/flutter`, pass `--author <agent-login>`
 or `--pr <owner/repo#N>` so only your tracked PRs are scanned rather than every
-open PR in the repository.
+open or recently merged PR in the repository. When passing `--pr` explicitly,
+include any recently merged PRs you want checked (`--pr` scans only the listed
+PRs and skips closed-unmerged PRs).
 
 It lists, per PR: unresolved review threads whose last comment is not from
 `--agent` (outdated ones are marked), non-empty human review bodies, and

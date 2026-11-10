@@ -167,6 +167,7 @@ class PrClassifier {
   ) {
     final ciOk = ci.isPassing || pr.hasNoChecksConfigured;
     if (!pr.isApproved ||
+        _awaitingOwnReview(pr, config) ||
         pr.isMergeBlocked ||
         !ciOk ||
         !_threadsClear(pr, config)) {
@@ -243,6 +244,7 @@ class PrClassifier {
     // call an approved PR "awaiting review".
     if (ci.isRepoStateOnly &&
         pr.isApproved &&
+        !_awaitingOwnReview(pr, config) &&
         !pr.isMergeBlocked &&
         _threadsClear(pr, config)) {
       return _buildItem(
@@ -330,7 +332,9 @@ class PrClassifier {
   /// Tier 6.
   TriagedItem? _checkMinorFeedback(PrItem pr, TriageConfig config, int days) {
     final open = _openThreads(pr, config);
-    if (!pr.isApproved || open == 0) return null;
+    if (!pr.isApproved || _awaitingOwnReview(pr, config) || open == 0) {
+      return null;
+    }
     return _buildItem(
       pr: pr,
       queue: QueueType.myWork,
@@ -392,13 +396,12 @@ class PrClassifier {
     int days,
   ) {
     final ciReady = ci.isPassing || pr.hasNoChecksConfigured;
-    if (pr.isMergeBlocked || !ciReady || _approvedByMe(pr, config)) {
+    if (pr.isMergeBlocked || !ciReady || !_awaitingOwnReview(pr, config)) {
       return null;
     }
-    if (_activeBlockingReviews(pr).isNotEmpty || _openThreads(pr, config) > 0) {
+    if (_activeBlockingReviews(pr).isNotEmpty || !_threadsClear(pr, config)) {
       return null;
     }
-    if (!_needsOwnReview(pr, config)) return null;
     return _buildItem(
       pr: pr,
       queue: QueueType.myWork,
@@ -410,13 +413,18 @@ class PrClassifier {
     );
   }
 
-  bool _needsOwnReview(PrItem pr, TriageConfig config) {
-    if (config.isAgentAccount(pr.author)) return true;
-    return pr.requestedReviewers.any(
-      (r) =>
-          config.isMyAccount(r) && r.toLowerCase() != pr.author.toLowerCase(),
-    );
+  static bool _awaitingOwnReview(PrItem pr, TriageConfig config) {
+    if (_isOwnReviewRequested(pr, config)) return true;
+    return config.isAgentAccount(pr.author) && !_approvedByHumanMe(pr, config);
   }
+
+  static bool _isOwnReviewRequested(PrItem pr, TriageConfig config) =>
+      pr.requestedReviewers.any(
+        (r) =>
+            config.isMyAccount(r) &&
+            !config.isAgentAccount(r) &&
+            r.toLowerCase() != pr.author.toLowerCase(),
+      );
 
   /// Tiers 9 and 10.
   TriagedItem _reviewAgeItem(PrItem pr, TriageConfig config, int days) {
@@ -776,18 +784,22 @@ class PrClassifier {
   /// has approved, threads only your own accounts took part in are settled:
   /// the PR waits on other reviewers or CI, not on you.
   static int _openThreads(PrItem pr, TriageConfig config) =>
-      _approvedByMe(pr, config)
+      _approvedByHumanMe(pr, config)
       ? pr.unresolvedThreadsExcluding(config.isMyAccount)
       : pr.unresolvedReviewThreads;
 
-  /// True when your accounts' most recent verdict on the PR is an approval.
+  /// True when a configured non-agent account's most recent verdict on the PR
+  /// is an approval.
   ///
   /// `COMMENTED` reviews are skipped because they do not withdraw an approval
   /// on GitHub. A later change request or a dismissal does.
-  static bool _approvedByMe(PrItem pr, TriageConfig config) {
+  static bool _approvedByHumanMe(PrItem pr, TriageConfig config) {
     PrReview? latest;
     for (final r in [...pr.allReviews, ...pr.latestReviews]) {
-      if (!config.isMyAccount(r.author) || r.isCommented) continue;
+      if (!config.isMyAccount(r.author) || config.isAgentAccount(r.author)) {
+        continue;
+      }
+      if (r.isCommented) continue;
       if (latest == null || r.submittedAt.isAfter(latest.submittedAt)) {
         latest = r;
       }

@@ -58,12 +58,14 @@ ArgParser _buildParser() => ArgParser()
   ..addOption('top', abbr: 't', defaultsTo: '3', help: 'Highlights per queue.')
   ..addMultiOption(
     'pr',
-    help: 'Specific PR(s) to triage (owner/repo#N or GitHub PR URL).',
+    help: 'Specific PR(s) to triage or scan (owner/repo#N, URL, or N with --repo).',
   )
   ..addFlag(
     'threads',
     negatable: false,
-    help: 'List reviewer feedback the agent has not answered (needs --repo).',
+    help:
+        'List reviewer feedback the agent has not answered '
+        '(needs --repo or --pr).',
   )
   ..addOption('repo', help: '--threads: repository as owner/name.')
   ..addOption(
@@ -162,8 +164,22 @@ String? _findConfig(LocalFileSystem fs) {
 
 /// Runs `--threads` mode and returns the process exit code.
 Future<int> runThreads(ArgResults opts, {ThreadScanner? scanner}) async {
-  final options = _threadOptions(opts, DateTime.now());
-  if (options == null) return 64;
+  final ThreadScanOptions options;
+  try {
+    options = parseThreadScanOptions(
+      rawRepo: opts.option('repo'),
+      rawPrs: opts.multiOption('pr'),
+      agent: opts.option('agent'),
+      rawSince: opts.option('since'),
+      rawIncludeMerged: opts.option('include-merged')!,
+      ignoreAuthors: opts.multiOption('ignore-author'),
+      authors: opts.multiOption('author'),
+      now: DateTime.now(),
+    );
+  } on FormatException catch (e) {
+    stderr.writeln(e.message);
+    return 64;
+  }
   final result = await (scanner ?? ThreadScanner()).scan(options);
   if (opts.flag('json')) {
     stdout.writeln(const JsonEncoder.withIndent('  ').convert(result.toJson()));
@@ -174,62 +190,4 @@ Future<int> runThreads(ArgResults opts, {ThreadScanner? scanner}) async {
     stderr.writeln('error: fetch failed, report is incomplete: $failure');
   }
   return result.failures.isEmpty ? 0 : 1;
-}
-
-ThreadScanOptions? _threadOptions(ArgResults opts, DateTime now) {
-  final rawPrs = opts.multiOption('pr');
-  var repo = opts.option('repo');
-  final prNumbers = <int>{};
-  for (final raw in rawPrs) {
-    final trimmed = raw.trim();
-    final intOnly = int.tryParse(trimmed);
-    if (intOnly != null) {
-      prNumbers.add(intOnly);
-      continue;
-    }
-    try {
-      final spec = PrSpec.parse(trimmed);
-      repo ??= spec.repo;
-      if (spec.repo.toLowerCase() != repo.toLowerCase()) {
-        stderr.writeln('--threads --pr entries must belong to one repository.');
-        return null;
-      }
-      prNumbers.add(spec.number);
-    } on FormatException catch (e) {
-      stderr.writeln(e.message);
-      return null;
-    }
-  }
-  if (repo == null || !RegExp(r'^[\w.-]+/[\w.-]+$').hasMatch(repo)) {
-    stderr.writeln(
-      '--threads requires --repo owner/name (or --pr owner/repo#N).',
-    );
-    return null;
-  }
-  final merged = parseDuration(opts.option('include-merged')!);
-  if (merged == null) {
-    stderr.writeln('--include-merged must be a duration such as 2d or 12h.');
-    return null;
-  }
-  final since = _parseSince(opts.option('since'), now);
-  if (opts.option('since') != null && since == null) return null;
-  return ThreadScanOptions(
-    repo: repo,
-    agent: opts.option('agent'),
-    since: since,
-    includeMerged: merged,
-    ignoreAuthors: opts.multiOption('ignore-author').toSet(),
-    authors: opts.multiOption('author').toSet(),
-    prNumbers: prNumbers,
-  );
-}
-
-DateTime? _parseSince(String? rawSince, DateTime now) {
-  if (rawSince == null) return null;
-  final d = parseDuration(rawSince);
-  final parsed = d != null ? now.subtract(d) : DateTime.tryParse(rawSince);
-  if (parsed == null) {
-    stderr.writeln('--since must be an ISO time or a duration such as 6h.');
-  }
-  return parsed;
 }

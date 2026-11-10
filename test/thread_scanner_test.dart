@@ -75,8 +75,10 @@ class FakeGh {
     calls.add(args);
     if (args.first == 'pr' && args[1] == 'view') {
       final n = int.parse(args[2]);
-      final found = [...open, ...merged].firstWhere((p) => p['number'] == n);
-      return _ok(jsonEncode(found));
+      if (n == failPr) return ProcessResult(0, 1, '', 'HTTP 502');
+      final found = [...open, ...merged].where((p) => p['number'] == n);
+      if (found.isEmpty) return ProcessResult(0, 1, '', 'HTTP 404');
+      return _ok(jsonEncode(found.first));
     }
     if (args.first == 'pr') {
       return _ok(jsonEncode(open));
@@ -136,11 +138,13 @@ Map<String, Object?> prRef(
   int n, {
   String? mergedAt,
   String author = 'reidbaker-agent',
+  String? state,
 }) => {
   'number': n,
   'title': 'PR $n',
   'url': 'https://github.com/$kRepo/pull/$n',
   'mergedAt': mergedAt,
+  'state': state ?? (mergedAt == null ? 'OPEN' : 'MERGED'),
   'author': {'login': author},
 };
 
@@ -311,6 +315,7 @@ String mergedPage(List<(int, String, String)> prs, {String? next}) =>
 void main() {
   mergedFollowUpTests();
   scopingAndConcurrencyTests();
+  optionParsingTests();
 
   test('pages merged PRs until updatedAt passes the cutoff', () async {
     // kNow is 2026-10-22T15:00Z, so the default 2d cutoff is 10-20T15:00Z.
@@ -501,22 +506,26 @@ class _ConcurrencyMeter {
   int active = 0;
   int peak = 0;
 
-  static bool _isPrGraphql(List<String> args) =>
-      args.length > 1 &&
-      args[1] == 'graphql' &&
-      args.any((a) => a.startsWith('number='));
+  static int? _prNumber(List<String> args) {
+    if (args.length <= 1 || args[1] != 'graphql') return null;
+    for (final a in args) {
+      if (a.startsWith('number=')) return int.parse(a.substring(7));
+    }
+    return null;
+  }
 
   Future<ProcessResult> call(String exe, List<String> args) async {
-    final tracked = _isPrGraphql(args);
-    if (tracked) {
+    final pr = _prNumber(args);
+    if (pr != null) {
       active++;
       if (active > peak) peak = active;
-      await Future<void>.delayed(const Duration(milliseconds: 10));
+      // Earlier PRs take longer so completion order differs from input order.
+      await Future<void>.delayed(Duration(milliseconds: (8 - pr) * 4));
     }
     try {
       return await _base.call(exe, args);
     } finally {
-      if (tracked) active--;
+      if (pr != null) active--;
     }
   }
 }
@@ -544,28 +553,39 @@ void scopingAndConcurrencyTests() {
     expect([for (final p in result.merged) p.number], [3]);
   });
 
-  test('scans only explicit prNumbers without listing repo PRs', () async {
-    final gh = FakeGh(
-      open: [prRef(10), prRef(20)],
-      threadPages: {
-        20: {
-          '': threadPage([
-            thread([comment(99, 'lrhn', '2026-10-22T12:00:00Z')]),
-          ]),
+  test(
+    'prNumbers skips closed-unmerged PRs, honors authors, and isolates errors',
+    () async {
+      final gh = FakeGh(
+        open: [
+          prRef(10, author: 'someone'),
+          prRef(20, author: 'reidbaker-agent'),
+          prRef(30, author: 'reidbaker-agent', state: 'CLOSED'),
+        ],
+        failPr: 40,
+        threadPages: {
+          20: {
+            '': threadPage([
+              thread([comment(99, 'lrhn', '2026-10-22T12:00:00Z')]),
+            ]),
+          },
         },
-      },
-    );
-    final result = await ThreadScanner(runner: gh.call, clock: () => kNow).scan(
-      const ThreadScanOptions(
-        repo: kRepo,
-        agent: 'reidbaker-agent',
-        prNumbers: {20},
-      ),
-    );
-    expect([for (final p in result.open) p.number], [20]);
-    expect(result.open.single.items.single.id, 99);
-    expect(gh.calls.any((c) => c.length > 1 && c[1] == 'list'), isFalse);
-  });
+      );
+      final result = await ThreadScanner(runner: gh.call, clock: () => kNow)
+          .scan(
+            const ThreadScanOptions(
+              repo: kRepo,
+              agent: 'reidbaker-agent',
+              authors: {'reidbaker-agent'},
+              prNumbers: {10, 20, 30, 40},
+            ),
+          );
+      expect([for (final p in result.open) p.number], [20]);
+      expect(result.open.single.items.single.id, 99);
+      expect(result.failures.single, contains('#40'));
+      expect(gh.calls.any((c) => c.length > 1 && c[1] == 'list'), isFalse);
+    },
+  );
 
   test('caps concurrent PR scans at maxConcurrency and keeps order', () async {
     final meter = _ConcurrencyMeter(
@@ -579,7 +599,72 @@ void scopingAndConcurrencyTests() {
             maxConcurrency: 2,
           ),
         );
-    expect(meter.peak, lessThanOrEqualTo(2));
+    expect(meter.peak, 2);
     expect([for (final p in result.open) p.number], [1, 2, 3, 4, 5, 6]);
+  });
+}
+
+void optionParsingTests() {
+  test('parseSince handles durations, ISO timestamps, and invalid input', () {
+    expect(parseSince('6h', kNow), kNow.subtract(const Duration(hours: 6)));
+    expect(
+      parseSince(' 2026-10-20T00:00:00Z ', kNow),
+      DateTime.utc(2026, 10, 20),
+    );
+    expect(parseSince('yesterday', kNow), isNull);
+  });
+
+  test('parseThreadScanOptions infers repo from --pr and validates inputs', () {
+    final opts = parseThreadScanOptions(
+      rawPrs: [
+        'flutter/packages#12',
+        'https://github.com/flutter/packages/pull/15',
+      ],
+      rawIncludeMerged: '2d',
+      rawSince: '12h',
+      authors: ['reidbaker-agent'],
+      now: kNow,
+    );
+    expect(opts.repo, 'flutter/packages');
+    expect(opts.prNumbers, {12, 15});
+    expect(opts.authors, {'reidbaker-agent'});
+
+    // Bare positive integer works when --repo is provided.
+    final bare = parseThreadScanOptions(
+      rawRepo: 'flutter/flutter',
+      rawPrs: ['42'],
+      rawIncludeMerged: '2d',
+      now: kNow,
+    );
+    expect(bare.prNumbers, {42});
+
+    // Rejects zero/negative PR numbers and mismatched repos.
+    expect(
+      () => parseThreadScanOptions(
+        rawRepo: 'flutter/flutter',
+        rawPrs: ['0'],
+        rawIncludeMerged: '2d',
+        now: kNow,
+      ),
+      throwsA(isA<FormatException>()),
+    );
+    expect(
+      () => parseThreadScanOptions(
+        rawRepo: 'flutter/flutter',
+        rawPrs: ['-5'],
+        rawIncludeMerged: '2d',
+        now: kNow,
+      ),
+      throwsA(isA<FormatException>()),
+    );
+    expect(
+      () => parseThreadScanOptions(
+        rawRepo: 'flutter/flutter',
+        rawPrs: ['flutter/packages#1'],
+        rawIncludeMerged: '2d',
+        now: kNow,
+      ),
+      throwsA(isA<FormatException>()),
+    );
   });
 }

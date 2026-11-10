@@ -8,6 +8,14 @@
 accounts:
   - your-github-login
 
+# Optional subset of `accounts` operated by automated agents. Unapproved
+# green PRs authored by these accounts rank in "Agent PR Ready for Your
+# Review" (Tier 4). When omitted and multiple `accounts` are configured,
+# entries ending in `-agent` are treated as agent accounts automatically; set
+# `agent_accounts: []` to disable that default.
+# agent_accounts:
+#   - your-github-login-agent
+
 # PRs outside these organizations are demoted. Repositories owned by one of
 # your own accounts are demoted further as personal forks or POCs.
 primary_orgs:

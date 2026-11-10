@@ -109,6 +109,7 @@ Then these two sections, both required:
 
 **Verdict** - your overall call in one or two sentences.
 
-**Checked and found clean** - at most five concise bullets covering the
-hypotheses you investigated and disproved, each citing an exact `path:line` or
-executed command with the evidence that disproved it.
+**Checked and found clean** - concise bullets covering every assigned
+hypothesis you disproved (or explicitly skipped, with the reason) plus at most
+five additional unassigned checks, each citing an exact `path:line` or executed
+command with the evidence that disproved it.

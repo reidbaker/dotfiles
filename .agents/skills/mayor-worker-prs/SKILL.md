@@ -15,9 +15,9 @@ If the maintainer who will review the work has an author brief in `~/Documents/a
 
 ## Mayor rules
 
-1. **Before saying a PR needs review or checking PR status,** run `pr_triage.dart` on the tracked PRs from the devconfig repository root (this skill lives at `<root>/.agents/skills/mayor-worker-prs`):
+1. **Before saying a PR needs review or checking PR status,** run `pr_triage.dart` on the tracked PRs from the `devconfig` repository root (`~/devconfig`, where this skill lives at `<root>/.agents/skills/mayor-worker-prs`):
    ```bash
-   dart run bin/pr_triage.dart --pr <owner>/<repo>#<n1>,<owner>/<repo>#<n2>
+   (cd ~/devconfig && dart run bin/pr_triage.dart --pr <owner>/<repo>#<n1>,<owner>/<repo>#<n2>)
    ```
    Use the returned `tier_name`, `action_prompt`, `reason`, `ci_status`, and `failing_checks` rather than hand-rolling `gh pr checks` or `gh api` loops. `pr_triage.dart` already ignores repository-wide checks (`tree-status`, `Check Code Freeze`), ignores settled self-review threads between the user's own accounts once approved, and keeps re-review PRs on the author until the author has pushed or replied after the user's last review. `pr_triage.dart` takes a snapshot; to wait for CI to finish, use `gh pr checks <n> -R <owner>/<repo> --watch`.
 2. **Before filing an issue,** search open and closed issues: `gh issue list -R <owner>/<repo> --state all --search "<keywords>"`.
@@ -37,7 +37,7 @@ If the maintainer who will review the work has an author brief in `~/Documents/a
 ## Rounds and reviewers
 
 1. **Re-query before listing.** Re-query live PR and issue state in the same turn before you tell the user what waits on them. Never list from memory. (A merged PR was once listed 48 minutes after it merged.) Before you call a PR ready, re-fetch all its review threads and reviews (`gh api repos/<owner>/<repo>/pulls/<n>/comments`, `gh pr view <n> --json reviews`), including ones posted since your last check.
-2. **Re-scan before calling a round done.** From the devconfig root, run `dart run bin/pr_triage.dart --threads --repo <owner>/<repo> --agent <agent-login>`. Handle every unanswered thread from *any* reviewer, including comments posted while the round ran and comments on PRs merged in the last 2 days (`--include-merged`). (A mid-round comment was once missed, and a reviewer's 22 comments sat for 4 days.)
+2. **Re-scan before calling a round done.** Run `(cd ~/devconfig && dart run bin/pr_triage.dart --threads --repo <owner>/<repo> --agent <agent-login> --author <agent-login>)` (or pass `--pr <owner>/<repo>#<n1>,<owner>/<repo>#<n2>` naming open and recently merged tracked PRs). Handle every unanswered thread from *any* reviewer, including comments posted while the round ran and comments on PRs merged in the last 2 days (`--include-merged`). (A mid-round comment was once missed, and a reviewer's 22 comments sat for 4 days.)
 3. **Watch with one cron.** Use one combined cron for new review comments across all tracked PRs, never one per PR or duplicates. When it finds a comment, dispatch the owning worker at once.
 4. **Who gets a posted reply (all repos).** Agents reply directly on GitHub to: (a) the user's own comments (`reidbaker`, unless clearly addressed to someone else), and (b) bot or explicitly agent-generated comments (bot accounts, or human accounts whose comment carries an explicit bot/agent marker such as a trailing `🤖 Agent-generated` / `<!-- agent-generated -->` suffix). For human-written comments from anyone else, agents may change code and draft replies locally for the user to post, never posting directly. If unsure whether a comment is bot-generated or human-written, draft locally and ask. (22 agent replies to a human reviewer had to be deleted.)
 5. **Weigh feedback; don't just obey it.** Decide each comment on its merits and report it as changed, modified or declined. Exception: if the user agreed to a reviewer's suggestion, do it unless it breaks code or maintainability.
