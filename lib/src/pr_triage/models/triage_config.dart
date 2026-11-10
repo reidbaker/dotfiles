@@ -61,6 +61,12 @@ const Map<String, String> kDefaultPresubmitTriggers = {
 /// Exceeding it returns `EXCESSIVE_PAGINATION` and fails the whole query.
 const int kMaxSearchPageSize = 100;
 
+/// Maximum size of [TriageConfig.teamMembers] serialized inline in
+/// [TriageConfig.toJson] before omitting the raw list in favour of
+/// `team_members_count` (org resolution can expand `team_orgs` to hundreds of
+/// logins).
+const int kMaxInlineTeamMembers = 25;
+
 /// A per-PR annotation that adjusts how a specific pull request is triaged.
 class PrOverride {
   const PrOverride({this.demote = false, this.tier, this.action, this.note});
@@ -119,6 +125,7 @@ class PrOverride {
 class TriageConfig {
   const TriageConfig({
     required this.accounts,
+    this.agentAccounts,
     this.teamMembers = const [],
     this.teamOrgs = const [],
     this.primaryOrgs = const ['flutter', 'dart-lang'],
@@ -138,6 +145,19 @@ class TriageConfig {
     this.mentionWindowBusinessDays = 10,
     this.nonPrChecks = kDefaultNonPrChecks,
   });
+
+  static List<String> _mergeAgentAccounts(
+    List<String> accounts,
+    List<String>? agentAccounts,
+  ) {
+    if (agentAccounts == null || agentAccounts.isEmpty) return accounts;
+    final seen = {for (final a in accounts) a.toLowerCase()};
+    final extra = [
+      for (final a in agentAccounts)
+        if (seen.add(a.toLowerCase())) a,
+    ];
+    return extra.isEmpty ? accounts : [...accounts, ...extra];
+  }
 
   /// Factory that builds a default config around the current GitHub user.
   factory TriageConfig.defaultForUser(String username) {
@@ -170,8 +190,13 @@ class TriageConfig {
     final cla = _stringList(map, ['cla_missing_labels', 'claMissingLabels']);
     final limit = _int(map, ['query_limit', 'queryLimit'], 50);
 
+    final explicitAgents = _optionalStringList(map, [
+      'agent_accounts',
+      'agentAccounts',
+    ]);
     return TriageConfig(
-      accounts: accounts,
+      accounts: _mergeAgentAccounts(accounts, explicitAgents),
+      agentAccounts: explicitAgents,
       teamMembers: _stringList(map, ['team_members', 'teamMembers']),
       teamOrgs: _stringList(map, ['team_orgs', 'teamOrgs']),
       primaryOrgs: primaryOrgs.isEmpty
@@ -208,6 +233,26 @@ class TriageConfig {
   }
 
   final List<String> accounts;
+
+  /// Subset of [accounts] operated by automated agents (for example
+  /// `reidbaker-agent`). When `null` (omitted in config), defaults to any
+  /// entry in [accounts] ending in `-agent` when multiple accounts are
+  /// configured; an explicit empty list `[]` disables that fallback.
+  final List<String>? agentAccounts;
+
+  /// Union of [accounts] and any explicit [agentAccounts] entries.
+  List<String> get allAccounts => _mergeAgentAccounts(accounts, agentAccounts);
+
+  /// Effective agent logins after applying the `-agent` multi-account default.
+  List<String> get effectiveAgentAccounts {
+    final explicit = agentAccounts;
+    if (explicit != null) return explicit;
+    if (accounts.length <= 1) return const [];
+    return [
+      for (final a in accounts)
+        if (a.toLowerCase().endsWith('-agent')) a,
+    ];
+  }
 
   /// Explicit teammate logins. Combined with logins resolved from [teamOrgs].
   final List<String> teamMembers;
@@ -264,6 +309,7 @@ class TriageConfig {
     }.toList()..sort();
     return TriageConfig(
       accounts: accounts,
+      agentAccounts: agentAccounts,
       teamMembers: merged,
       teamOrgs: teamOrgs,
       primaryOrgs: primaryOrgs,
@@ -302,7 +348,14 @@ class TriageConfig {
 
   /// Returns true if [username] is one of the configured user accounts.
   bool isMyAccount(String username) {
-    return accounts.any((a) => a.toLowerCase() == username.toLowerCase());
+    final lower = username.toLowerCase();
+    return allAccounts.any((a) => a.toLowerCase() == lower);
+  }
+
+  /// Returns true if [username] is a configured agent account.
+  bool isAgentAccount(String username) {
+    final lower = username.toLowerCase();
+    return effectiveAgentAccounts.any((a) => a.toLowerCase() == lower);
   }
 
   /// Returns true if [username] is a known teammate.
@@ -421,14 +474,17 @@ class TriageConfig {
     );
   }
 
-  /// Unlike the label lists, an explicit empty list is honoured rather than
-  /// replaced by the defaults, so `non_pr_checks: []` turns the feature off.
-  static List<String> _nonPrChecks(YamlMap map) {
-    const keys = ['non_pr_checks', 'nonPrChecks'];
+  static List<String>? _optionalStringList(YamlMap map, List<String> keys) {
     final value = _firstNonNull(map, keys);
-    if (value == null) return kDefaultNonPrChecks;
+    if (value == null) return null;
     return _toStringList(value, keys.first);
   }
+
+  /// Unlike the label lists, an explicit empty list is honoured rather than
+  /// replaced by the defaults, so `non_pr_checks: []` turns the feature off.
+  static List<String> _nonPrChecks(YamlMap map) =>
+      _optionalStringList(map, const ['non_pr_checks', 'nonPrChecks']) ??
+      kDefaultNonPrChecks;
 
   static Map<String, String> _extractPresubmitTriggers(YamlMap map) {
     final scalar =
@@ -483,8 +539,12 @@ class TriageConfig {
   }
 
   Map<String, dynamic> toJson() => {
-    'accounts': accounts,
-    'team_members': teamMembers,
+    'accounts': allAccounts,
+    if (effectiveAgentAccounts.isNotEmpty)
+      'agent_accounts': effectiveAgentAccounts,
+    'team_members_count': teamMembers.length,
+    if (teamMembers.length <= kMaxInlineTeamMembers)
+      'team_members': teamMembers,
     'team_orgs': teamOrgs,
     'primary_orgs': primaryOrgs,
     'primary_repos': primaryRepos,

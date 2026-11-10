@@ -28,9 +28,11 @@ cp .agents/skills/pr-triage/resources/config.example.yaml \
    .agents/skills/pr-triage/resources/config.yaml
 ```
 
-Then set `accounts:` to the GitHub logins to triage. Without a config the tool
-falls back to the single authenticated `gh` user and prints a warning to
-stderr.
+Then set `accounts:` to the GitHub logins to triage (and optionally
+`agent_accounts:` when your automated agent logins do not follow the default
+`*-agent` suffix convention; set `agent_accounts: []` to disable that default).
+Without a config the tool falls back to the single authenticated `gh` user and
+prints a warning to stderr.
 
 Resolving `team_orgs` into teammate logins needs a token with the `read:org`
 scope. Without it the run still succeeds, falls back to the static
@@ -82,30 +84,35 @@ rule.
    no blocking reviews, and no unresolved threads. It looks finished and was
    probably never marked ready.
    * *Action*: `[Action: Mark ready for review & notify reviewers]`
-4. **Failing CI (Flaky candidate)**: Every failing PR check (ignoring
+4. **Agent PR Ready for Your Review**: Non-draft PR authored by a configured
+   agent account (or requesting another configured account as reviewer), CI
+   green (or no checks configured), no merge conflicts, no unresolved threads,
+   and not yet approved by your human account.
+   * *Action*: `[Action: Review & approve agent PR]`
+5. **Failing CI (Flaky candidate)**: Every failing PR check (ignoring
    `non_pr_checks`) matches `flaky_test_keywords`.
    * *Action*: `[Action: Investigate/re-run flaky CI]`
-5. **Approved with Minor Comments**: Approved but with unresolved threads.
+6. **Approved with Minor Comments**: Approved but with unresolved threads.
    * *Action*: `[Action: Address minor comments & land]`
-6. **Failing CI (Needs Code Fix)**: PR check failures that are not flaky.
+7. **Failing CI (Needs Code Fix)**: PR check failures that are not flaky.
    * *Action*: `[Action: Fix failing tests/lints]`
-7. **Substantial Review Feedback / Changes Requested**: An active blocking
+8. **Substantial Review Feedback / Changes Requested**: An active blocking
    review, or several unresolved threads.
    * *Action*: `[Action: Address review feedback]`
-8. **Stalled in Review (>= threshold business days)**: Awaiting review for at
+9. **Stalled in Review (>= threshold business days)**: Awaiting review for at
    least `stale_review_business_days`, counted from the most recent review
    request.
    * *Action*: `[Action: Ping reviewer(s)]`
-9. **In Review (within normal window)**: Awaiting review, still inside the
-   threshold.
-   * *Action*: `[Action: Awaiting review]`
-10. **Active Draft / WIP (Primary Repo)**: A draft that is genuinely
+10. **In Review (within normal window)**: Awaiting review, still inside the
+    threshold.
+    * *Action*: `[Action: Awaiting review]`
+11. **Active Draft / WIP (Primary Repo)**: A draft that is genuinely
     unfinished. The reason string names what is outstanding.
     * *Action*: `[Action: Resume development / Work in progress]`
-11. **Repository Not In primary_orgs**: A real repository, just not one being
+12. **Repository Not In primary_orgs**: A real repository, just not one being
     tracked. Distinct from a personal fork.
     * *Action*: `[Action: Low urgency - add repo to primary_orgs to promote]`
-12. **Personal Fork / POC**: The repository is owned by one of the configured
+13. **Personal Fork / POC**: The repository is owned by one of the configured
     accounts, or the PR was demoted via `pr_overrides`.
     * *Action*: `[Action: POC / Fork - Low urgency]`
 
@@ -175,10 +182,10 @@ Terms used below:
 ## Execution Procedure
 
 ### Step 1: Run the CLI
-From the devconfig repository root (this skill lives at
+Run from the `devconfig` repository root (`~/devconfig`, where this skill lives at
 `<root>/.agents/skills/pr-triage`):
 ```bash
-dart run bin/pr_triage.dart
+(cd ~/devconfig && dart run bin/pr_triage.dart)
 ```
 Useful flags: `--pr <owner/repo#number>` (repeatable or comma-separated, or a
 GitHub PR URL) to triage only specific PRs, `--config` for an alternate config
@@ -189,11 +196,13 @@ at 100), `--top` to change how many highlights each queue reports.
 JSON goes to stdout; warnings go to stderr. Read stderr too, it is where an
 incomplete run announces itself.
 
-* `top_my_work` and `top_review_queue`: compact references for the highlights,
-  each already carrying `tier_name`, `action_prompt`, `reason`, and
-  `business_days_elapsed`. Sorted by tier rank, then by days elapsed
-  descending.
-* `my_work` and `review_queue`: the full lists with complete PR detail.
+* `top_my_work` and `top_review_queue`: flat compact references (`item['number']`,
+  `item['repo']`, `item['title']`, `item['url']`, `item['tier_name']`,
+  `item['action_prompt']`, `item['reason']`, `item['business_days_elapsed']`),
+  sorted by tier rank, then by days elapsed descending.
+* `my_work` and `review_queue`: full lists where PR metadata is nested under
+  `item['pr']` (`item['pr']['number']`, `item['pr']['url']`, etc.) alongside
+  top-level `tier_name`, `action_prompt`, and `reason`.
 * `truncated`: true when GitHub had more matches than `query_limit` returned.
   Say so in the report rather than presenting a partial queue as complete.
 * `warnings`: non-fatal problems worth repeating to the user.
@@ -223,9 +232,15 @@ list. Comments arrive mid-round and land on PRs that merge minutes later, so
 re-check every time.
 
 ```bash
-dart run bin/pr_triage.dart --threads --repo <owner/repo> --agent <login> \
-  [--since <ISO time or 6h>] [--include-merged 2d] [--ignore-author <login>] [--json]
+(cd ~/devconfig && dart run bin/pr_triage.dart --threads --repo <owner/repo> --agent <login> \
+  [--author <login>] [--pr <owner/repo#N>] [--since <ISO time or 6h>] [--include-merged 2d] [--ignore-author <login>] [--json])
 ```
+
+On large repositories such as `flutter/flutter`, pass `--author <agent-login>`
+or `--pr <owner/repo#N>` so only your tracked PRs are scanned rather than every
+open or recently merged PR in the repository. When passing `--pr` explicitly,
+include any recently merged PRs you want checked (`--pr` scans only the listed
+PRs and skips closed-unmerged PRs).
 
 It lists, per PR: unresolved review threads whose last comment is not from
 `--agent` (outdated ones are marked), non-empty human review bodies, and

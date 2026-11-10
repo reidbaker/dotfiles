@@ -25,63 +25,57 @@ abstract interface class TriageTier {
 /// rank rather than relying on the order of `if` statements, so this list is
 /// the single source of truth for priority.
 enum MyWorkTier implements TriageTier {
-  readyToMerge(1, 'Ready to Merge', '[Action: Merge]'),
+  readyToMerge('Ready to Merge', '[Action: Merge]'),
   waitingOnCicdTask(
-    2,
     'Waiting on CI/CD Task / Action Required',
     '[Action: Unblock CI/CD task / Trigger CI]',
   ),
   draftReadyForReview(
-    3,
     'Draft Ready for Review (CI Green)',
     '[Action: Mark ready for review & notify reviewers]',
   ),
+  awaitingOwnReview(
+    'Agent PR Ready for Your Review',
+    '[Action: Review & approve agent PR]',
+  ),
   flakyCiFailure(
-    4,
     'Failing CI (Flaky candidate)',
     '[Action: Investigate/re-run flaky CI]',
   ),
   minorFeedbackWithApproval(
-    5,
     'Approved with Minor Comments',
     '[Action: Address minor comments & land]',
   ),
   failingCiWorkRelated(
-    6,
     'Failing CI (Needs Code Fix)',
     '[Action: Fix failing tests/lints]',
   ),
   substantialFeedback(
-    7,
     'Substantial Review Feedback / Changes Requested',
     '[Action: Address review feedback]',
   ),
   stalledInReview(
-    8,
     'Stalled in Review (>= threshold business days)',
     '[Action: Ping reviewer(s)]',
   ),
   freshInReview(
-    9,
     'In Review (within normal window)',
     '[Action: Awaiting review]',
   ),
   draft(
-    10,
     'Active Draft / WIP (Primary Repo)',
     '[Action: Resume development / Work in progress]',
   ),
   nonPrimaryRepo(
-    11,
     'Repository Not In primary_orgs',
     '[Action: Low urgency - add repo to primary_orgs to promote]',
   ),
-  forkOrPoc(12, 'Personal Fork / POC', '[Action: POC / Fork - Low urgency]');
+  forkOrPoc('Personal Fork / POC', '[Action: POC / Fork - Low urgency]');
 
-  const MyWorkTier(this.rank, this.displayName, this.defaultAction);
+  const MyWorkTier(this.displayName, this.defaultAction);
 
   @override
-  final int rank;
+  int get rank => index + 1;
   @override
   final String displayName;
   @override

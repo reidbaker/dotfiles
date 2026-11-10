@@ -131,9 +131,9 @@ class TriageEngine {
       );
     }
     final (authored, review) = await (
-      fetcher.fetchAuthored(authors: config.accounts, limit: limit),
+      fetcher.fetchAuthored(authors: config.allAccounts, limit: limit),
       fetcher.fetchReviewQueue(
-        reviewers: config.accounts,
+        reviewers: config.allAccounts,
         limit: limit,
         includeAssignee: config.searchAssignee,
       ),

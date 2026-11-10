@@ -130,6 +130,14 @@ falsify:
 - The new test passes against a deliberately broken implementation.
 - The retry path can be entered twice concurrently and double-increments.
 - The deleted test's coverage does not exist anywhere else in the tree.
+- A new diagnostic, error, or help message promises external CLI output or
+  behavior that the tool does not emit with those flags (inspect upstream
+  source or run the command to check).
+- A new test or lint claims to enforce an existing repository convention that
+  did not actually hold on `<base>` before this change.
+- A consolidation or refactor silently drops an instruction, CLI flag, or
+  example, or shifts a modal verb (`ask`/`propose` to `write`/`push`), without
+  a 1-to-1 destination.
 
 Not a hypothesis: "the error handling could be better." Nothing falsifies that,
 so investigating it produces opinion, not findings.
@@ -202,7 +210,9 @@ Two sections are mandatory:
 **Checked and found clean** - the hypotheses you investigated and disproved.
 This is not filler. It tells the author which risks are covered so nobody
 re-reviews them, and it shows that your findings are the survivors of a process
-rather than everything you thought of.
+rather than everything you thought of. Keep this section to at most five concise
+bullets, and cite an exact `path:line` or executed command on every bullet
+rather than bare summary prose.
 
 ### 6. Leave the workspace as you found it
 

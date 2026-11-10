@@ -128,7 +128,10 @@ class ThreadScanOptions {
     this.since,
     this.includeMerged = const Duration(days: 2),
     this.ignoreAuthors = const {},
-  });
+    this.authors = const {},
+    this.prNumbers = const {},
+    this.maxConcurrency = 8,
+  }) : assert(maxConcurrency >= 1, 'maxConcurrency must be >= 1');
 
   /// `owner/name`.
   final String repo;
@@ -146,6 +149,15 @@ class ThreadScanOptions {
   /// Logins treated like the agent: their comments are hidden and, as the
   /// last comment of a thread, do not count as an answer by a reviewer.
   final Set<String> ignoreAuthors;
+
+  /// Optional PR author filter (case-insensitive) to scope large repositories.
+  final Set<String> authors;
+
+  /// Optional explicit PR numbers to scan instead of listing all repo PRs.
+  final Set<int> prNumbers;
+
+  /// Maximum number of PRs fetched or scanned concurrently.
+  final int maxConcurrency;
 }
 
 /// Lists reviewer feedback that has not been answered by the agent, across
@@ -165,17 +177,39 @@ class ThreadScanner {
   final Map<String, Future<_LinkStatus>> _linkCache = {};
 
   Future<ThreadScanResult> scan(ThreadScanOptions options) async {
+    RangeError.range(options.maxConcurrency, 1, null, 'maxConcurrency');
     final failures = <String>[];
     final List<_PrRef> refs;
     try {
-      refs = await _listPrs(options);
+      refs = await _listPrs(options, failures);
     } on Object catch (e) {
       return ThreadScanResult(prs: const [], failures: ['listing PRs: $e']);
     }
-    final results = await Future.wait([
-      for (final ref in refs) _scanPrSafely(ref, options, failures),
-    ]);
+    final results = await _runBounded<_PrRef, PrFeedback?>(
+      refs,
+      options.maxConcurrency,
+      (ref) => _scanPrSafely(ref, options, failures),
+    );
     return ThreadScanResult(prs: [...results.nonNulls], failures: failures);
+  }
+
+  static Future<List<R>> _runBounded<T, R>(
+    List<T> items,
+    int limit,
+    Future<R> Function(T item) fn,
+  ) async {
+    final results = List<R?>.filled(items.length, null);
+    var nextIndex = 0;
+    Future<void> worker() async {
+      while (nextIndex < items.length) {
+        final idx = nextIndex++;
+        results[idx] = await fn(items[idx]);
+      }
+    }
+
+    final workerCount = items.length < limit ? items.length : limit;
+    await Future.wait([for (var i = 0; i < workerCount; i++) worker()]);
+    return results.cast<R>();
   }
 
   Future<PrFeedback?> _scanPrSafely(
@@ -191,20 +225,70 @@ class ThreadScanner {
     }
   }
 
-  Future<List<_PrRef>> _listPrs(ThreadScanOptions options) async {
+  Future<List<_PrRef>> _listPrs(
+    ThreadScanOptions options,
+    List<String> failures,
+  ) async {
+    final authorSet = options.authors.map((a) => a.toLowerCase()).toSet();
+    if (options.prNumbers.isNotEmpty) {
+      return _fetchExplicitPrRefs(options, authorSet, failures);
+    }
+    final fields = authorSet.isEmpty
+        ? 'number,title,url,mergedAt'
+        : 'number,title,url,mergedAt,author';
     final open = await _ghJson([
       'pr', 'list', '-R', options.repo, '--state', 'open', //
-      '--limit', '1000', '--json', 'number,title,url,mergedAt',
+      '--limit', '1000', '--json', fields,
     ]);
     final cutoff = _clock().toUtc().subtract(options.includeMerged);
     final refs = <int, _PrRef>{
       for (final raw in open as List)
-        (raw as Map<String, dynamic>)['number'] as int: _PrRef.fromJson(raw),
+        for (final ref in [_PrRef.fromJson(raw as Map<String, dynamic>)])
+          if (ref.matchesAuthor(authorSet)) ref.number: ref,
     };
-    for (final ref in await _mergedSince(options.repo, cutoff)) {
+    for (final ref in await _mergedSince(options.repo, cutoff, authorSet)) {
       refs[ref.number] = ref;
     }
     return refs.values.toList()..sort((a, b) => a.number - b.number);
+  }
+
+  Future<List<_PrRef>> _fetchExplicitPrRefs(
+    ThreadScanOptions options,
+    Set<String> authorSet,
+    List<String> failures,
+  ) async {
+    final sorted = options.prNumbers.toList()..sort();
+    final fetched = await _runBounded<int, _PrRef?>(
+      sorted,
+      options.maxConcurrency,
+      (n) => _fetchExplicitPrSafely(options.repo, n, failures),
+    );
+    return [
+      for (final ref in fetched.nonNulls)
+        if (!ref.closedUnmerged && ref.matchesAuthor(authorSet)) ref,
+    ];
+  }
+
+  Future<_PrRef?> _fetchExplicitPrSafely(
+    String repo,
+    int number,
+    List<String> failures,
+  ) async {
+    try {
+      final raw = await _ghJson([
+        'pr',
+        'view',
+        '$number',
+        '-R',
+        repo,
+        '--json',
+        'number,title,url,mergedAt,state,author',
+      ]);
+      return _PrRef.fromJson(raw as Map<String, dynamic>);
+    } on Object catch (e) {
+      failures.add('PR #$number: $e');
+      return null;
+    }
   }
 
   /// Lists PRs merged at or after [cutoff].
@@ -213,7 +297,11 @@ class ThreadScanner {
   /// is eventually consistent and was seen returning no results at all.
   /// Merging updates a PR, so once a page reaches `updatedAt < cutoff` no
   /// later page can hold a PR merged after it.
-  Future<List<_PrRef>> _mergedSince(String repo, DateTime cutoff) async {
+  Future<List<_PrRef>> _mergedSince(
+    String repo,
+    DateTime cutoff, [
+    Set<String> authorSet = const {},
+  ]) async {
     final [owner, name] = repo.split('/');
     final refs = <_PrRef>[];
     String? cursor;
@@ -229,11 +317,12 @@ class ThreadScanner {
         throw const FormatException('missing pullRequests in response');
       }
       final nodes = (conn['nodes'] as List).cast<Map<String, dynamic>>();
-      refs.addAll([
-        for (final n in nodes)
-          if (!DateTime.parse(n['mergedAt'] as String).isBefore(cutoff))
-            _PrRef.fromJson(n),
-      ]);
+      for (final n in nodes) {
+        final ref = _PrRef.fromJson(n);
+        if (ref.mergedOnOrAfter(cutoff) && ref.matchesAuthor(authorSet)) {
+          refs.add(ref);
+        }
+      }
       final info = conn['pageInfo'] as Map;
       more =
           info['hasNextPage'] == true &&
@@ -250,7 +339,7 @@ query($owner: String!, $name: String!, $cursor: String) {
     pullRequests(states: MERGED, first: 100, after: $cursor,
         orderBy: {field: UPDATED_AT, direction: DESC}) {
       pageInfo { hasNextPage endCursor }
-      nodes { number title url mergedAt updatedAt }
+      nodes { number title url mergedAt updatedAt author { login } }
     }
   }
 }''';
@@ -471,8 +560,7 @@ query($owner: String!, $name: String!, $cursor: String) {
     return jsonDecode(res.stdout.toString());
   }
 
-  static String _login(Object? user) =>
-      (user is Map ? user['login'] as String? : null) ?? 'ghost';
+  static String _login(Object? user) => _extractLogin(user);
 
   static String _short(String body) {
     final flat = body.replaceAll(RegExp(r'\s+'), ' ').trim();
@@ -505,18 +593,33 @@ class _LinkStatus {
   final String state;
 }
 
+String _extractLogin(Object? user) =>
+    (user is Map ? user['login'] as String? : null) ?? 'ghost';
+
 class _PrRef {
-  const _PrRef(this.number, this.title, this.url, this.mergedAt);
+  const _PrRef(
+    this.number,
+    this.title,
+    this.url,
+    this.mergedAt, {
+    this.author = '',
+    this.closedUnmerged = false,
+  });
 
   factory _PrRef.fromJson(Map<String, dynamic> j) {
     final merged = j['mergedAt'] as String?;
+    final mergedAt =
+        merged == null || merged.isEmpty || merged.startsWith('0001')
+        ? null
+        : DateTime.parse(merged);
+    final state = (j['state'] as String?)?.toUpperCase();
     return _PrRef(
       j['number'] as int,
       j['title'] as String? ?? '',
       j['url'] as String? ?? '',
-      merged == null || merged.isEmpty || merged.startsWith('0001')
-          ? null
-          : DateTime.parse(merged),
+      mergedAt,
+      author: _extractLogin(j['author']),
+      closedUnmerged: state == 'CLOSED' && mergedAt == null,
     );
   }
 
@@ -524,6 +627,14 @@ class _PrRef {
   final String title;
   final String url;
   final DateTime? mergedAt;
+  final String author;
+  final bool closedUnmerged;
+
+  bool mergedOnOrAfter(DateTime cutoff) =>
+      mergedAt != null && !mergedAt!.isBefore(cutoff);
+
+  bool matchesAuthor(Set<String> lowerAuthors) =>
+      lowerAuthors.isEmpty || lowerAuthors.contains(author.toLowerCase());
 }
 
 /// Parses `2d`, `36h`, `90m` or `45s`.
@@ -537,6 +648,85 @@ Duration? parseDuration(String raw) {
     'm' => Duration(minutes: n),
     _ => Duration(seconds: n),
   };
+}
+
+/// Parses an ISO-8601 timestamp or a relative duration (such as `6h`) against
+/// [now]. Returns `null` when [raw] matches neither format.
+DateTime? parseSince(String raw, DateTime now) {
+  final trimmed = raw.trim();
+  final d = parseDuration(trimmed);
+  return d != null ? now.subtract(d) : DateTime.tryParse(trimmed);
+}
+
+final RegExp _repoPattern = RegExp(r'^[\w.-]+/[\w.-]+$');
+final RegExp _positiveIntPattern = RegExp(r'^[1-9]\d*$');
+
+/// Parses CLI options for `--threads` mode into [ThreadScanOptions], throwing
+/// [FormatException] on invalid usage.
+ThreadScanOptions parseThreadScanOptions({
+  String? rawRepo,
+  List<String> rawPrs = const [],
+  String? agent,
+  String? rawSince,
+  required String rawIncludeMerged,
+  Iterable<String> ignoreAuthors = const [],
+  Iterable<String> authors = const [],
+  required DateTime now,
+}) {
+  var repo = rawRepo?.trim();
+  if (repo != null && !_repoPattern.hasMatch(repo)) {
+    throw FormatException('--repo must be owner/name, got "$rawRepo".');
+  }
+  final prNumbers = <int>{};
+  for (final raw in rawPrs) {
+    repo = _addThreadPrSpec(raw.trim(), repo, prNumbers);
+  }
+  if (repo == null) {
+    throw const FormatException(
+      '--threads requires --repo owner/name (or --pr owner/repo#N).',
+    );
+  }
+  final merged = parseDuration(rawIncludeMerged);
+  if (merged == null) {
+    throw const FormatException(
+      '--include-merged must be a duration such as 2d or 12h.',
+    );
+  }
+  DateTime? since;
+  if (rawSince != null) {
+    since = parseSince(rawSince, now);
+    if (since == null) {
+      throw const FormatException(
+        '--since must be an ISO time or a duration such as 6h.',
+      );
+    }
+  }
+  return ThreadScanOptions(
+    repo: repo,
+    agent: agent,
+    since: since,
+    includeMerged: merged,
+    ignoreAuthors: ignoreAuthors.toSet(),
+    authors: authors.toSet(),
+    prNumbers: prNumbers,
+  );
+}
+
+String? _addThreadPrSpec(String trimmed, String? repo, Set<int> prNumbers) {
+  if (_positiveIntPattern.hasMatch(trimmed)) {
+    prNumbers.add(int.parse(trimmed));
+    return repo;
+  }
+  final spec = PrSpec.parse(trimmed);
+  final resolved = repo ?? spec.repo;
+  if (spec.repo.toLowerCase() != resolved.toLowerCase()) {
+    throw FormatException(
+      '--threads scans one repository at a time, got "$resolved" and '
+      '"${spec.repo}".',
+    );
+  }
+  prNumbers.add(spec.number);
+  return resolved;
 }
 
 /// Renders [result] as plain text for a terminal or a chat paste.

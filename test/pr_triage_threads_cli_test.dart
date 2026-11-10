@@ -114,4 +114,17 @@ esac
     ]);
     expect(res.exitCode, 64);
   });
+
+  test('--threads rejects non-positive --pr as a usage error', () async {
+    final res = await Process.run(Platform.resolvedExecutable, [
+      'run',
+      'bin/pr_triage.dart',
+      '--threads',
+      '--repo',
+      'o/r',
+      '--pr',
+      '-1',
+    ]);
+    expect(res.exitCode, 64);
+  });
 }
