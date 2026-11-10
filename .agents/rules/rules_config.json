@@ -7,11 +7,18 @@
         "mac"
       ]
     },
+    {
+      "name": "sandbox-boundary.md",
+      "machines": [
+        "cloudtop"
+      ]
+    },
     "pr-comment-replies.md",
     "release-tracker-checkboxes.md",
     "secret-hygiene.md",
     "autonomy-and-decisions.md",
     "review-before-ready.md",
-    "quota-and-fan-out.md"
+    "quota-and-fan-out.md",
+    "cross-machine-sync.md"
   ]
 }
