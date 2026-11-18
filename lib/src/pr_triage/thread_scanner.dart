@@ -547,7 +547,7 @@ query($owner: String!, $name: String!, $cursor: String) {
 
   Future<Object?> _ghJson(List<String> args) => ghJson(_runner, args);
 
-  static String _login(Object? user) => _extractLogin(user);
+  static String _login(Object? user) => loginOf(user);
 
   static String _short(String body) {
     final flat = body.replaceAll(RegExp(r'\s+'), ' ').trim();
@@ -580,9 +580,6 @@ class _LinkStatus {
   final String state;
 }
 
-String _extractLogin(Object? user) =>
-    (user is Map ? user['login'] as String? : null) ?? 'ghost';
-
 class _PrRef {
   const _PrRef(
     this.number,
@@ -605,7 +602,7 @@ class _PrRef {
       j['title'] as String? ?? '',
       j['url'] as String? ?? '',
       mergedAt,
-      author: _extractLogin(j['author']),
+      author: loginOf(j['author']),
       closedUnmerged: state == 'CLOSED' && mergedAt == null,
     );
   }

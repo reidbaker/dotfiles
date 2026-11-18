@@ -2,7 +2,8 @@ import 'dart:convert';
 
 import 'github_fetcher.dart';
 
-/// The `sha` of one `adversarial-review` pass in the review log.
+/// A commit that an `adversarial-review` pass covered, as logged in the
+/// review log.
 class ReviewedSha {
   const ReviewedSha(this.repo, this.sha);
 
@@ -434,9 +435,8 @@ ReviewState _parseReview(Map r) {
   return ReviewState(author: login, isBot: isBot, state: r['state'] as String);
 }
 
-/// A deleted account has no author; GitHub shows it as `ghost`.
 (String, bool) _parseAuthor(Object? user) {
-  final login = (user is Map ? user['login'] as String? : null) ?? 'ghost';
+  final login = loginOf(user);
   final typeName = user is Map ? user['__typename'] as String? : null;
   return (login, isBotAccount(login, typeName));
 }

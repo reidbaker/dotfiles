@@ -21,6 +21,11 @@ Future<ProcessResult> defaultCommandRunner(
 bool isBotAccount(String login, String? typeName) =>
     typeName == 'Bot' || login.endsWith('[bot]');
 
+/// The `login` of a GitHub user object. A deleted account has no user object;
+/// GitHub shows it as `ghost`.
+String loginOf(Object? user) =>
+    (user is Map ? user['login'] as String? : null) ?? 'ghost';
+
 /// Runs `gh` with [args] through [runner] and decodes its JSON output.
 /// Throws [FormatException] when `gh` exits non-zero.
 Future<Object?> ghJson(CommandRunner runner, List<String> args) async {
