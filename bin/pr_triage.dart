@@ -92,6 +92,13 @@ ArgParser _buildParser() => ArgParser()
         '--threads, --ready: login whose reply marks a thread done '
         '(--ready: replaces the PR author).',
   )
+  ..addOption(
+    'user',
+    defaultsTo: 'reidbaker',
+    help:
+        '--ready: the human the agents work for. Their reply answers a '
+        'thread another reviewer started.',
+  )
   ..addOption('since', help: '--threads: ISO time or duration (e.g. 6h).')
   ..addOption(
     'include-merged',
@@ -240,7 +247,12 @@ Future<int> runReady(ArgResults opts, {ReadyChecker? checker}) async {
   final ready = checker ?? ReadyChecker();
   var allReady = true;
   for (final spec in specs) {
-    final verdict = await ready.check(spec, log, answerers: answerers);
+    final verdict = await ready.check(
+      spec,
+      log,
+      answerers: answerers,
+      user: opts.option('user'),
+    );
     stdout.writeln(verdict.line);
     allReady = allReady && verdict.ready;
   }

@@ -104,13 +104,15 @@ void main() {
     expect(res.stdout, startsWith('NOT READY o/r#7'));
   });
 
-  test('--agent decides whose reply answers a thread', () async {
+  /// Writes one unresolved thread on a PR by [author], with a comment from
+  /// each of [logins] in order.
+  void writeThread(String author, List<String> logins) {
     File('${dir.path}/threads.json').writeAsStringSync(
       jsonEncode({
         'data': {
           'repository': {
             'pullRequest': {
-              'author': {'login': 'reidbaker'},
+              'author': {'login': author},
               'headRefOid': head,
               'reviewThreads': {
                 'pageInfo': {'hasNextPage': false},
@@ -119,7 +121,7 @@ void main() {
                     'isResolved': false,
                     'comments': {
                       'nodes': [
-                        for (final login in ['matt561', 'helper-agent'])
+                        for (final login in logins)
                           {
                             'author': {'login': login, '__typename': 'User'},
                             'createdAt': '2026-11-02T00:00:00Z',
@@ -135,6 +137,10 @@ void main() {
         },
       }),
     );
+  }
+
+  test('--agent decides whose reply answers a thread', () async {
+    writeThread('reidbaker', ['matt561', 'helper-agent']);
     final log = writeLog(head);
     final without = await run(['--pr', 'o/r#7', '--review-log', log]);
     expect(without.exitCode, 1, reason: '${without.stdout}');
@@ -149,6 +155,26 @@ void main() {
     ]);
     expect(withAgent.exitCode, 0, reason: '${withAgent.stdout}');
   });
+
+  test(
+    '--user names whose reply answers a reviewer, reidbaker by default',
+    () async {
+      writeThread('agent', ['matt561', 'reidbaker']);
+      final log = writeLog(head);
+      final byDefault = await run(['--pr', 'o/r#7', '--review-log', log]);
+      expect(byDefault.exitCode, 0, reason: '${byDefault.stdout}');
+      final other = await run([
+        '--pr',
+        'o/r#7',
+        '--review-log',
+        log,
+        '--user',
+        'someone-else',
+      ]);
+      expect(other.exitCode, 1, reason: '${other.stdout}');
+      expect(other.stdout, contains('u-reidbaker'));
+    },
+  );
 
   test('exits 64 without --pr', () async {
     final res = await run([]);

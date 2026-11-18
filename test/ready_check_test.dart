@@ -300,6 +300,45 @@ void _unansweredThreadsTests() {
     expect(unansweredThreads(pr, const {}).single.author, 'matt561');
   });
 
+  test("the user's reply answers another reviewer's thread", () {
+    final pr = _pr(
+      threads: [
+        thread([_comment('matt561', 5), _comment('ReidBaker', 6)]),
+      ],
+    );
+    expect(unansweredThreads(pr, const {}, user: 'reidbaker'), isEmpty);
+    expect(unansweredThreads(pr, const {}), hasLength(1));
+  });
+
+  test("the user's reply does not answer the user's own thread", () {
+    final pr = _pr(
+      threads: [
+        thread([_comment('reidbaker', 5)]),
+        thread([
+          _comment('reidbaker', 5),
+          _comment('matt561', 6),
+          _comment('reidbaker', 7),
+        ]),
+      ],
+    );
+    final waiting = unansweredThreads(pr, const {}, user: 'reidbaker');
+    expect(waiting.map((c) => c.createdAt), [_at(5), _at(7)]);
+  });
+
+  test('a reviewer reply after the user waits again', () {
+    final pr = _pr(
+      threads: [
+        thread([
+          _comment('matt561', 5),
+          _comment('reidbaker', 6),
+          _comment('matt561', 7),
+        ]),
+      ],
+    );
+    final waiting = unansweredThreads(pr, const {}, user: 'reidbaker');
+    expect(waiting.single.createdAt, _at(7));
+  });
+
   test('resolved threads and bot-only threads are skipped', () {
     final pr = _pr(
       threads: [

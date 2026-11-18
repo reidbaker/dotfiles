@@ -167,12 +167,22 @@ Set<String> _answering(PrSnapshot pr, Set<String> answerers) => {
 /// answer.
 ///
 /// A thread waits when its last non-bot comment is by someone other than the
-/// answerers (see [_answering]), unless code answered it. Code answers only a
-/// thread with a single human comment, when GitHub marks it outdated and a
-/// non-merge commit on the PR is dated after it. GitHub marks every comment
-/// in a thread outdated together, so a follow-up comment needs a reply.
+/// answerers (see [_answering]), unless code or [user] answered it. Code
+/// answers only a thread with a single human comment, when GitHub marks it
+/// outdated and a non-merge commit on the PR is dated after it. GitHub marks
+/// every comment in a thread outdated together, so a follow-up comment needs
+/// a reply.
+///
+/// [user] is the human the agents work for. Their reply answers a thread that
+/// another reviewer started. A thread [user] started still waits for an
+/// answerer, because there [user] is the reviewer.
+///
 /// Threads with only bot comments are skipped.
-List<ThreadComment> unansweredThreads(PrSnapshot pr, Set<String> answerers) {
+List<ThreadComment> unansweredThreads(
+  PrSnapshot pr,
+  Set<String> answerers, {
+  String? user,
+}) {
   final answering = _answering(pr, answerers);
   final lastCode = _lastCodeCommitTime(pr.commits);
   final out = <ThreadComment>[];
@@ -182,11 +192,21 @@ List<ThreadComment> unansweredThreads(PrSnapshot pr, Set<String> answerers) {
     if (humans.isEmpty) continue;
     final last = humans.last;
     if (answering.contains(last.author.toLowerCase())) continue;
+    if (_userAnswered(humans, user)) continue;
     final codeAfter = lastCode != null && lastCode.isAfter(last.createdAt);
     if (humans.length == 1 && last.outdated && codeAfter) continue;
     out.add(last);
   }
   return out;
+}
+
+/// Whether [user] wrote the last of [humans] in a thread someone else
+/// started.
+bool _userAnswered(List<ThreadComment> humans, String? user) {
+  if (user == null || user.isEmpty) return false;
+  final login = user.toLowerCase();
+  return humans.last.author.toLowerCase() == login &&
+      humans.first.author.toLowerCase() != login;
 }
 
 /// The human reviewers, other than the answerers, whose latest review
@@ -233,11 +253,12 @@ ReadyVerdict judgeReadiness(
   PrSnapshot pr,
   List<ReviewedSha> log, {
   Set<String> answerers = const {},
+  String? user,
 }) {
   final reasons = <String>[];
   final reviewReason = _reviewReason(spec, pr, log);
   if (reviewReason != null) reasons.add(reviewReason);
-  final waiting = unansweredThreads(pr, answerers);
+  final waiting = unansweredThreads(pr, answerers, user: user);
   if (waiting.isNotEmpty) {
     final noun = waiting.length == 1 ? 'thread' : 'threads';
     reasons.add(
@@ -296,6 +317,7 @@ class ReadyChecker {
     PrSpec spec,
     List<ReviewedSha> log, {
     Set<String> answerers = const {},
+    String? user,
   }) async {
     final PrSnapshot pr;
     try {
@@ -303,7 +325,7 @@ class ReadyChecker {
     } on Object catch (e) {
       return ReadyVerdict(spec, ['fetch or parse failed: $e']);
     }
-    return judgeReadiness(spec, pr, log, answerers: answerers);
+    return judgeReadiness(spec, pr, log, answerers: answerers, user: user);
   }
 
   /// Reads the commits (REST) and review threads (GraphQL) of [spec].
