@@ -254,3 +254,31 @@ only by the maintainer.
 
 A non-zero exit or any `FETCH FAILURE` line means the report is incomplete.
 Do not call the round done until a run exits 0.
+
+---
+
+## Readiness check (`--ready`)
+
+```bash
+(cd ~/devconfig && dart run bin/pr_triage.dart --ready --pr <owner/repo#N>[,<owner/repo#N>] \
+  [--agent <login>] [--ignore-author <login>] [--review-log <path>])
+```
+
+Prints one line per PR, `READY <pr>` or `NOT READY <pr>: <reasons>`; exits 1 if
+any PR is not ready. `READY` needs all three:
+
+1. Every non-merge commit on the PR is covered by an `adversarial-review` entry
+   for that repo in `~/.agents/review-log.jsonl` (an entry covers its
+   `reviewed_sha` and every ancestor; short SHAs match as prefixes).
+2. No unresolved inline review thread whose last human comment is from a
+   reviewer, unless an answerer replied after it. A commit dated after the
+   comment counts as the answer only when the thread has a single human comment
+   and GitHub marks it outdated; any follow-up comment needs an answerer's
+   reply.
+3. No human reviewer's latest approval or change request is `CHANGES_REQUESTED`
+   (a later plain comment does not clear it).
+
+Answerers are the PR author, or the `--agent`/`--ignore-author` logins when
+given. Not checked: PR-level comments, review bodies without
+`CHANGES_REQUESTED`, and conflict fixes inside merge commits (review those by
+hand). PRs with 250+ commits are `NOT READY` because GitHub lists only 250.

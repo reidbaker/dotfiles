@@ -48,6 +48,8 @@ Label every claim with its tier:
 - **Fetched** - content you retrieved over the network this session, quoted verbatim
 - **Deduction** - a step-by-step logic, control-flow, or state trace through
   code read this session, citing exact lines for each step
+- **Proxy** - you executed something, but not the behavior you claim; treat as
+  Speculation for the uncovered claim (run the real behavior or downgrade)
 - **Speculation** - reasoning over incomplete information or unmeasured claims
 - **Recalled** - not acceptable, do not use
 
