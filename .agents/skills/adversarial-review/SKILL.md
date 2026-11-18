@@ -32,10 +32,9 @@ Every claim carries an evidence tier. State the tier in the finding.
 - **Deduction** - a step-by-step logic, control-flow, or state trace through
   code read this session. Acceptable for Blocker or Major when each step cites
   exact file and line numbers.
-- **Proxy** - you executed something, but not the behavior you claim. For
-  example, "the APK will not install" backed only by `aapt2 dump badging`, or
-  "the test fails" backed only by a compile. Treat it as Speculation for the
-  claim it does not cover. Run the real behavior or downgrade the finding.
+- **Proxy** - you ran something, but not the behavior you claim. Treat it as
+  Speculation for the unverified behavior: run the behavior itself or downgrade
+  the finding.
 - **Speculation** - reasoning over incomplete information, unmeasured
   performance claims, or hunches. Acceptable for Question or Minor only.
 - **Recalled** - you remember it being this way. Never acceptable.
@@ -137,9 +136,6 @@ falsify:
 - A new diagnostic, error, or help message promises external CLI output or
   behavior that the tool does not emit with those flags (inspect upstream
   source or run the command to check).
-- A fix that rewords an error or doc to stop recommending a bad outcome still
-  leaves a code path that produces that outcome. Check every path, including
-  escape-hatch flags and early returns.
 - A new test or lint claims to enforce an existing repository convention that
   did not actually hold on `<base>` before this change.
 - A consolidation or refactor silently drops an instruction, CLI flag, or
@@ -178,8 +174,8 @@ Questions to resolve:
 5. Does the severity match the evidence tier I can actually supply?
 6. If the author asks for proof, do I have a concrete reproduction or
    line-by-line trace to show?
-7. Did I observe the exact behavior I am claiming, or only an artifact that
-   usually goes with it? Name the command that shows the behavior itself.
+7. Did I observe the behavior I claim, or only inspect a related output? Run
+   the command that exercises the behavior itself, or downgrade to Proxy.
 
 Generic falsification techniques:
 

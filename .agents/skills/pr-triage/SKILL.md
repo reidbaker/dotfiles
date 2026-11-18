@@ -261,7 +261,7 @@ Do not call the round done until a run exits 0.
 
 ```bash
 (cd ~/devconfig && dart run bin/pr_triage.dart --ready --pr <owner/repo#N>[,<owner/repo#N>] \
-  [--agent <login>] [--ignore-author <login>] [--review-log <path>])
+  [--agent <login>] [--user <login>] [--ignore-author <login>] [--review-log <path>])
 ```
 
 Prints one line per PR, `READY <pr>` or `NOT READY <pr>: <reasons>`; exits 1 if
@@ -278,8 +278,9 @@ any PR is not ready. `READY` needs all three:
    (a later plain comment does not clear it).
 
 Answerers are the PR author, or the `--agent`/`--ignore-author` logins when
-given. `--threads` still lists threads that `--ready` counts as answered by
-code; reply to them anyway. Not checked: PR-level comments, review bodies
-without `CHANGES_REQUESTED`, and conflict fixes inside merge commits (review
-those by hand). PRs with 250+ commits are `NOT READY` because GitHub lists only
-250.
+given. A reply from `--user <login>` (default `reidbaker`) also answers a thread
+another reviewer started; a thread `--user` started still waits for an answerer.
+`--threads` still lists threads that `--ready` counts as answered by code; reply
+to them anyway. Not checked: PR-level comments, review bodies without
+`CHANGES_REQUESTED`, and conflict fixes inside merge commits (review those by
+hand). PRs with 250+ commits are `NOT READY` because GitHub lists only 250.
