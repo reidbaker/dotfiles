@@ -104,6 +104,52 @@ void main() {
     expect(res.stdout, startsWith('NOT READY o/r#7'));
   });
 
+  test('--agent decides whose reply answers a thread', () async {
+    File('${dir.path}/threads.json').writeAsStringSync(
+      jsonEncode({
+        'data': {
+          'repository': {
+            'pullRequest': {
+              'author': {'login': 'reidbaker'},
+              'headRefOid': head,
+              'reviewThreads': {
+                'pageInfo': {'hasNextPage': false},
+                'nodes': [
+                  {
+                    'isResolved': false,
+                    'comments': {
+                      'nodes': [
+                        for (final login in ['matt561', 'helper-agent'])
+                          {
+                            'author': {'login': login, '__typename': 'User'},
+                            'createdAt': '2026-11-02T00:00:00Z',
+                            'url': 'u-$login',
+                          },
+                      ],
+                    },
+                  },
+                ],
+              },
+            },
+          },
+        },
+      }),
+    );
+    final log = writeLog(head);
+    final without = await run(['--pr', 'o/r#7', '--review-log', log]);
+    expect(without.exitCode, 1, reason: '${without.stdout}');
+    expect(without.stdout, contains('u-helper-agent'));
+    final withAgent = await run([
+      '--pr',
+      'o/r#7',
+      '--review-log',
+      log,
+      '--agent',
+      'helper-agent',
+    ]);
+    expect(withAgent.exitCode, 0, reason: '${withAgent.stdout}');
+  });
+
   test('exits 64 without --pr', () async {
     final res = await run([]);
     expect(res.exitCode, 64);

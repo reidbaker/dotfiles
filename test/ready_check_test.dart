@@ -27,17 +27,23 @@ List<PrCommit> _linear() => [
   _commit(_c, [_b], 2),
 ];
 
-ThreadComment _comment(String author, int hour, {bool bot = false}) =>
-    ThreadComment(
-      author: author,
-      isBot: bot,
-      createdAt: _at(hour),
-      url: 'https://github.com/o/r/pull/7#c-$author-$hour',
-    );
+ThreadComment _comment(
+  String author,
+  int hour, {
+  bool bot = false,
+  bool outdated = false,
+}) => ThreadComment(
+  author: author,
+  isBot: bot,
+  createdAt: _at(hour),
+  url: 'https://github.com/o/r/pull/7#c-$author-$hour',
+  outdated: outdated,
+);
 
 PrSnapshot _pr({
   List<PrCommit>? commits,
   List<ReviewThread> threads = const [],
+  List<ReviewState> latestReviews = const [],
   String author = 'agent',
 }) {
   final list = commits ?? _linear();
@@ -46,6 +52,7 @@ PrSnapshot _pr({
     headSha: list.last.sha,
     commits: list,
     threads: threads,
+    latestReviews: latestReviews,
   );
 }
 
@@ -203,13 +210,44 @@ void _unansweredThreadsTests() {
     expect(unansweredThreads(pr, const {}), hasLength(1));
   });
 
-  test('a code commit after the comment answers it', () {
+  test('with answerers given, the PR author is a reviewer', () {
+    // The human and the agent can share the PR author's account.
+    final pr = _pr(
+      author: 'reidbaker',
+      threads: [
+        thread([_comment('reidbaker', 5)]),
+      ],
+    );
+    expect(unansweredThreads(pr, {'reidbaker-agent'}), hasLength(1));
+    expect(unansweredThreads(pr, const {}), isEmpty);
+  });
+
+  test('an outdated comment with a later commit is answered by code', () {
+    final pr = _pr(
+      threads: [
+        thread([_comment('matt561', 1, outdated: true)]),
+      ],
+    );
+    expect(unansweredThreads(pr, const {}), isEmpty);
+  });
+
+  test('a later commit that left the lines alone does not answer it', () {
+    // A rebase re-dates every commit, so dates alone prove nothing.
     final pr = _pr(
       threads: [
         thread([_comment('matt561', 1)]),
       ],
     );
-    expect(unansweredThreads(pr, const {}), isEmpty);
+    expect(unansweredThreads(pr, const {}), hasLength(1));
+  });
+
+  test('an outdated comment with no later commit waits', () {
+    final pr = _pr(
+      threads: [
+        thread([_comment('matt561', 5, outdated: true)]),
+      ],
+    );
+    expect(unansweredThreads(pr, const {}), hasLength(1));
   });
 
   test('a merge commit after the comment does not answer it', () {
@@ -220,7 +258,7 @@ void _unansweredThreadsTests() {
     final pr = _pr(
       commits: commits,
       threads: [
-        thread([_comment('matt561', 5)]),
+        thread([_comment('matt561', 5, outdated: true)]),
       ],
     );
     expect(unansweredThreads(pr, const {}), hasLength(1));
@@ -305,7 +343,40 @@ void _judgeReadinessTests() {
       verdict.line,
       'NOT READY o/r#7: commits no adversarial-review entry covers: '
       'bbbbbbbbbb, cccccccccc; 1 human review thread without a reply or '
-      'later commit: https://github.com/o/r/pull/7#c-matt561-5',
+      'code change: https://github.com/o/r/pull/7#c-matt561-5',
+    );
+  });
+
+  test('NOT READY when a human reviewer requests changes', () {
+    final pr = _pr(
+      latestReviews: const [
+        ReviewState(
+          author: 'matt561',
+          isBot: false,
+          state: 'CHANGES_REQUESTED',
+        ),
+        ReviewState(author: 'lint', isBot: true, state: 'CHANGES_REQUESTED'),
+        ReviewState(author: 'reidbaker', isBot: false, state: 'APPROVED'),
+      ],
+    );
+    expect(
+      judgeReadiness(_spec, pr, log([_c])).line,
+      'NOT READY o/r#7: changes requested by matt561',
+    );
+  });
+
+  test('NOT READY when the head is missing from the commit list', () {
+    // GitHub's head moved after the commit list was fetched.
+    final pr = PrSnapshot(
+      author: 'agent',
+      headSha: 'f' * 40,
+      commits: _linear(),
+      threads: const [],
+    );
+    expect(
+      judgeReadiness(_spec, pr, log([_c])).line,
+      'NOT READY o/r#7: head ffffffffff is not in the commit list GitHub '
+      'returned; run again',
     );
   });
 
@@ -356,6 +427,14 @@ void _readyCheckerTests() {
         'pullRequest': {
           'author': {'login': 'agent'},
           'headRefOid': _c,
+          'latestReviews': {
+            'nodes': [
+              {
+                'state': 'CHANGES_REQUESTED',
+                'author': {'login': 'matt561', '__typename': 'User'},
+              },
+            ],
+          },
           'reviewThreads': {
             'pageInfo': {'hasNextPage': next != null, 'endCursor': next},
             'nodes': nodes,
@@ -373,6 +452,7 @@ void _readyCheckerTests() {
           'author': {'login': login, '__typename': type},
           'createdAt': _at(h).toIso8601String(),
           'url': 'u-$login',
+          'outdated': type == 'Bot',
         },
       ],
     },
@@ -407,13 +487,18 @@ void _readyCheckerTests() {
     expect(pr.commits.map((c) => c.sha), [_a, _b, _c]);
     expect(pr.commits.first.parents, [_base]);
     expect(pr.threads, hasLength(2));
+    expect(pr.threads.first.comments.single.outdated, isFalse);
     expect(pr.threads.last.comments.single.isBot, isTrue);
+    expect(pr.threads.last.comments.single.outdated, isTrue);
+    expect(pr.latestReviews.single.author, 'matt561');
+    expect(pr.latestReviews.single.state, 'CHANGES_REQUESTED');
     expect(calls.first, contains('repos/o/r/pulls/7/commits'));
     expect(calls, hasLength(3));
 
     final verdict = judgeReadiness(_spec, pr, [ReviewedSha('o/r', _c)]);
     expect(verdict.line, contains('1 human review thread'));
     expect(verdict.line, contains('u-matt561'));
+    expect(verdict.line, contains('changes requested by matt561'));
   });
 
   test('a failed fetch is NOT READY with the error', () async {
@@ -422,7 +507,7 @@ void _readyCheckerTests() {
 
     final verdict = await ReadyChecker(runner: runner).check(_spec, const []);
     expect(verdict.ready, isFalse);
-    expect(verdict.line, startsWith('NOT READY o/r#7: fetch failed:'));
+    expect(verdict.line, startsWith('NOT READY o/r#7: fetch or parse failed:'));
     expect(verdict.line, contains('HTTP 502'));
   });
 

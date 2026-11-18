@@ -60,7 +60,8 @@ class PrCommit {
   final DateTime committedAt;
 
   /// A merge commit brings in another branch, usually the base branch. It is
-  /// not counted as code that needs review.
+  /// not counted as code that needs review. This also skips conflict fixes
+  /// made in a merge; review those by hand.
   bool get isMerge => parents.length > 1;
 }
 
@@ -71,12 +72,16 @@ class ThreadComment {
     required this.isBot,
     required this.createdAt,
     required this.url,
+    this.outdated = false,
   });
 
   final String author;
   final bool isBot;
   final DateTime createdAt;
   final String url;
+
+  /// Whether GitHub marks the comment outdated: the lines it is on changed.
+  final bool outdated;
 }
 
 /// One inline review thread.
@@ -87,6 +92,19 @@ class ReviewThread {
   final List<ThreadComment> comments;
 }
 
+/// The latest review state of one reviewer, such as `CHANGES_REQUESTED`.
+class ReviewState {
+  const ReviewState({
+    required this.author,
+    required this.isBot,
+    required this.state,
+  });
+
+  final String author;
+  final bool isBot;
+  final String state;
+}
+
 /// What `--ready` needs to know about one pull request.
 class PrSnapshot {
   const PrSnapshot({
@@ -94,6 +112,7 @@ class PrSnapshot {
     required this.headSha,
     required this.commits,
     required this.threads,
+    this.latestReviews = const [],
   });
 
   final String author;
@@ -102,17 +121,13 @@ class PrSnapshot {
   /// Every commit on the PR, as listed by GitHub.
   final List<PrCommit> commits;
   final List<ReviewThread> threads;
+  final List<ReviewState> latestReviews;
 }
 
 /// The GitHub REST API lists at most this many commits for a pull request.
 const int maxListedCommits = 250;
 
-/// Whether a GitHub account is a bot. GraphQL reports bots with the
-/// `Bot` type and no `[bot]` suffix; REST adds the suffix.
-bool isBotAccount(String login, String? typeName) =>
-    typeName == 'Bot' || login.endsWith('[bot]');
-
-/// Returns the non-merge commits on [pr] that no logged review covers.
+/// The non-merge commits on [pr] that no logged review covers.
 ///
 /// A review of commit R covers R and every ancestor of R on the PR. Ancestry
 /// comes from the parent links GitHub returns for the PR's commits, so no
@@ -139,17 +154,21 @@ List<PrCommit>? unreviewedCommits(PrSnapshot pr, Iterable<String> loggedShas) {
   ];
 }
 
-/// Returns the last human comment of each unresolved thread that still waits
-/// for an answer.
+/// The logins whose replies answer a thread: [answerers] when given,
+/// otherwise the PR author. Lowercase.
+Set<String> _answering(PrSnapshot pr, Set<String> answerers) => {
+  for (final a in answerers.isEmpty ? {pr.author} : answerers) a.toLowerCase(),
+};
+
+/// The last human comment of each unresolved thread that still waits for an
+/// answer.
 ///
 /// A thread waits when its last non-bot comment is by someone other than the
-/// PR author or [answerers], and no non-merge commit on the PR was made after
-/// that comment. Threads with only bot comments are skipped.
+/// answerers (see [_answering]), unless code answered it: GitHub marks that
+/// comment outdated and a non-merge commit on the PR is dated after it.
+/// Threads with only bot comments are skipped.
 List<ThreadComment> unansweredThreads(PrSnapshot pr, Set<String> answerers) {
-  final answering = {
-    pr.author.toLowerCase(),
-    for (final a in answerers) a.toLowerCase(),
-  };
+  final answering = _answering(pr, answerers);
   final lastCode = _lastCodeCommitTime(pr.commits);
   final out = <ThreadComment>[];
   for (final thread in pr.threads) {
@@ -158,10 +177,24 @@ List<ThreadComment> unansweredThreads(PrSnapshot pr, Set<String> answerers) {
     if (humans.isEmpty) continue;
     final last = humans.last;
     if (answering.contains(last.author.toLowerCase())) continue;
-    if (lastCode != null && lastCode.isAfter(last.createdAt)) continue;
+    final codeAfter = lastCode != null && lastCode.isAfter(last.createdAt);
+    if (last.outdated && codeAfter) continue;
     out.add(last);
   }
   return out;
+}
+
+/// The human reviewers, other than the answerers, whose latest review
+/// requests changes.
+List<String> changesRequestedBy(PrSnapshot pr, Set<String> answerers) {
+  final answering = _answering(pr, answerers);
+  return [
+    for (final r in pr.latestReviews)
+      if (r.state == 'CHANGES_REQUESTED' &&
+          !r.isBot &&
+          !answering.contains(r.author.toLowerCase()))
+        r.author,
+  ];
 }
 
 DateTime? _lastCodeCommitTime(List<PrCommit> commits) {
@@ -203,9 +236,13 @@ ReadyVerdict judgeReadiness(
   if (waiting.isNotEmpty) {
     final noun = waiting.length == 1 ? 'thread' : 'threads';
     reasons.add(
-      '${waiting.length} human review $noun without a reply or later '
-      'commit: ${_listSome([for (final c in waiting) c.url])}',
+      '${waiting.length} human review $noun without a reply or code '
+      'change: ${_listSome([for (final c in waiting) c.url])}',
     );
+  }
+  final blockers = changesRequestedBy(pr, answerers);
+  if (blockers.isNotEmpty) {
+    reasons.add('changes requested by ${_listSome(blockers)}');
   }
   return ReadyVerdict(spec, reasons);
 }
@@ -214,6 +251,11 @@ String? _reviewReason(PrSpec spec, PrSnapshot pr, List<ReviewedSha> log) {
   if (pr.commits.length >= maxListedCommits) {
     return 'PR has $maxListedCommits or more commits, more than GitHub '
         'lists; check the review log by hand';
+  }
+  final head = pr.headSha.toLowerCase();
+  if (head.isEmpty || !pr.commits.any((c) => c.sha.toLowerCase() == head)) {
+    return 'head ${_short(pr.headSha)} is not in the commit list GitHub '
+        'returned; run again';
   }
   final repo = spec.repo.toLowerCase();
   final shas = [
@@ -254,57 +296,44 @@ class ReadyChecker {
     try {
       pr = await fetch(spec);
     } on Object catch (e) {
-      return ReadyVerdict(spec, ['fetch failed: $e']);
+      return ReadyVerdict(spec, ['fetch or parse failed: $e']);
     }
     return judgeReadiness(spec, pr, log, answerers: answerers);
   }
 
   /// Reads the commits (REST) and review threads (GraphQL) of [spec].
   Future<PrSnapshot> fetch(PrSpec spec) async {
-    final commitPages = await _ghJson([
+    final commitPages = await ghJson(_runner, [
       'api',
       'repos/${spec.repo}/pulls/${spec.number}/commits',
       '--paginate',
       '--slurp',
     ]);
     final commits = parseCommitPages(commitPages);
-    final threads = <ReviewThread>[];
-    String? author;
-    String? head;
-    String? cursor;
-    do {
+    final first = parseThreadPage(await _threadPage(spec, null));
+    final threads = [...first.threads];
+    var cursor = first.nextCursor;
+    while (cursor != null) {
       final page = parseThreadPage(await _threadPage(spec, cursor));
-      author ??= page.author;
-      head ??= page.headSha;
       threads.addAll(page.threads);
       cursor = page.nextCursor;
-    } while (cursor != null);
+    }
     return PrSnapshot(
-      author: author ?? '',
-      headSha: head ?? '',
+      author: first.author ?? '',
+      headSha: first.headSha ?? '',
       commits: commits,
       threads: threads,
+      latestReviews: first.latestReviews,
     );
   }
 
   Future<Object?> _threadPage(PrSpec spec, String? cursor) {
     final [owner, name] = spec.repo.split('/');
-    return _ghJson([
+    return ghJson(_runner, [
       'api', 'graphql', '-f', 'query=$_threadsQuery', //
       '-F', 'owner=$owner', '-F', 'name=$name', '-F', 'number=${spec.number}',
       if (cursor != null) ...['-F', 'cursor=$cursor'],
     ]);
-  }
-
-  Future<Object?> _ghJson(List<String> args) async {
-    final res = await _runner('gh', args);
-    if (res.exitCode != 0) {
-      throw FormatException(
-        '`gh ${args.take(3).join(' ')}` exited ${res.exitCode}: '
-        '${res.stderr.toString().trim()}',
-      );
-    }
-    return jsonDecode(res.stdout.toString());
   }
 
   static const String _threadsQuery = r'''
@@ -313,12 +342,15 @@ query($owner: String!, $name: String!, $number: Int!, $cursor: String) {
     pullRequest(number: $number) {
       author { login }
       headRefOid
+      latestReviews(first: 100) {
+        nodes { state author { login __typename } }
+      }
       reviewThreads(first: 100, after: $cursor) {
         pageInfo { hasNextPage endCursor }
         nodes {
           isResolved
           comments(last: 100) {
-            nodes { author { login __typename } createdAt url }
+            nodes { author { login __typename } createdAt url outdated }
           }
         }
       }
@@ -345,6 +377,7 @@ List<PrCommit> parseCommitPages(Object? pages) => [
 typedef ThreadPage = ({
   String? author,
   String? headSha,
+  List<ReviewState> latestReviews,
   List<ReviewThread> threads,
   String? nextCursor,
 });
@@ -361,6 +394,10 @@ ThreadPage parseThreadPage(Object? data) {
   return (
     author: pr['author']?['login'] as String?,
     headSha: pr['headRefOid'] as String?,
+    latestReviews: [
+      for (final r in (pr['latestReviews']?['nodes'] as List?) ?? const [])
+        _parseReview(r as Map),
+    ],
     threads: [for (final t in conn['nodes'] as List) _parseThread(t as Map)],
     nextCursor: info?['hasNextPage'] == true
         ? info!['endCursor'] as String?
@@ -377,13 +414,24 @@ ReviewThread _parseThread(Map t) => ReviewThread(
 );
 
 ThreadComment _parseComment(Map c) {
-  final user = c['author'];
-  final login = (user is Map ? user['login'] as String? : null) ?? 'ghost';
-  final typeName = user is Map ? user['__typename'] as String? : null;
+  final (login, isBot) = _parseAuthor(c['author']);
   return ThreadComment(
     author: login,
-    isBot: isBotAccount(login, typeName),
+    isBot: isBot,
     createdAt: DateTime.parse(c['createdAt'] as String),
     url: c['url'] as String? ?? '',
+    outdated: c['outdated'] == true,
   );
+}
+
+ReviewState _parseReview(Map r) {
+  final (login, isBot) = _parseAuthor(r['author']);
+  return ReviewState(author: login, isBot: isBot, state: r['state'] as String);
+}
+
+/// A deleted account has no author; GitHub shows it as `ghost`.
+(String, bool) _parseAuthor(Object? user) {
+  final login = (user is Map ? user['login'] as String? : null) ?? 'ghost';
+  final typeName = user is Map ? user['__typename'] as String? : null;
+  return (login, isBotAccount(login, typeName));
 }

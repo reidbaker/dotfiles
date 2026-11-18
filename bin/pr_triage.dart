@@ -76,9 +76,10 @@ ArgParser _buildParser() => ArgParser()
     'ready',
     negatable: false,
     help:
-        'Print READY or NOT READY for each --pr: needs an adversarial-review '
-        'log entry covering every code commit and no unanswered human '
-        'review thread. Exits 1 if any PR is not ready.',
+        'Print READY or NOT READY for each --pr. READY needs an '
+        'adversarial-review log entry covering every non-merge commit, no '
+        'unanswered human inline review thread, and no human '
+        'CHANGES_REQUESTED review. Exits 1 if any PR is not ready.',
   )
   ..addOption(
     'review-log',
@@ -87,7 +88,9 @@ ArgParser _buildParser() => ArgParser()
   ..addOption('repo', help: '--threads: repository as owner/name.')
   ..addOption(
     'agent',
-    help: '--threads, --ready: login whose reply marks a thread done.',
+    help:
+        '--threads, --ready: login whose reply marks a thread done '
+        '(--ready: replaces the PR author).',
   )
   ..addOption('since', help: '--threads: ISO time or duration (e.g. 6h).')
   ..addOption(
