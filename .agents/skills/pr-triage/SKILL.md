@@ -1,6 +1,6 @@
 ---
 name: pr-triage
-description: Identifies and prioritizes GitHub Pull Requests that need attention across authored work and review queues. Use when the user asks "what PR needs my attention next", "check my PRs", "triage my pull requests", or wants to review active pull request queues.
+description: Identifies and prioritizes GitHub Pull Requests that need attention across authored work and review queues, and checks whether a PR is ready to call ready (`--ready`). Use when the user asks "what PR needs my attention next", "check my PRs", "triage my pull requests", or wants to review active pull request queues.
 ---
 
 # PR Triage Skill
@@ -271,14 +271,15 @@ any PR is not ready. `READY` needs all three:
    for that repo in `~/.agents/review-log.jsonl` (an entry covers its
    `reviewed_sha` and every ancestor; short SHAs match as prefixes).
 2. No unresolved inline review thread whose last human comment is from a
-   reviewer, unless an answerer replied after it. A commit dated after the
-   comment counts as the answer only when the thread has a single human comment
-   and GitHub marks it outdated; any follow-up comment needs an answerer's
-   reply.
+   reviewer. A commit dated after the comment counts as the answer only when
+   the thread has a single human comment and GitHub marks it outdated; any
+   follow-up comment needs an answerer's reply.
 3. No human reviewer's latest approval or change request is `CHANGES_REQUESTED`
    (a later plain comment does not clear it).
 
 Answerers are the PR author, or the `--agent`/`--ignore-author` logins when
-given. Not checked: PR-level comments, review bodies without
-`CHANGES_REQUESTED`, and conflict fixes inside merge commits (review those by
-hand). PRs with 250+ commits are `NOT READY` because GitHub lists only 250.
+given. `--threads` still lists threads that `--ready` counts as answered by
+code; reply to them anyway. Not checked: PR-level comments, review bodies
+without `CHANGES_REQUESTED`, and conflict fixes inside merge commits (review
+those by hand). PRs with 250+ commits are `NOT READY` because GitHub lists only
+250.
