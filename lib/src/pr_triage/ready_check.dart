@@ -114,7 +114,7 @@ class PrSnapshot {
     required this.headSha,
     required this.commits,
     required this.threads,
-    this.latestReviews = const [],
+    this.opinionatedReviews = const [],
   });
 
   final String author;
@@ -123,7 +123,7 @@ class PrSnapshot {
   /// Every commit on the PR, as listed by GitHub.
   final List<PrCommit> commits;
   final List<ReviewThread> threads;
-  final List<ReviewState> latestReviews;
+  final List<ReviewState> opinionatedReviews;
 }
 
 /// The GitHub REST API lists at most this many commits for a pull request.
@@ -193,7 +193,7 @@ List<ThreadComment> unansweredThreads(PrSnapshot pr, Set<String> answerers) {
 List<String> changesRequestedBy(PrSnapshot pr, Set<String> answerers) {
   final answering = _answering(pr, answerers);
   return [
-    for (final r in pr.latestReviews)
+    for (final r in pr.opinionatedReviews)
       if (r.state == 'CHANGES_REQUESTED' &&
           !r.isBot &&
           !answering.contains(r.author.toLowerCase()))
@@ -327,7 +327,7 @@ class ReadyChecker {
       headSha: first.headSha ?? '',
       commits: commits,
       threads: threads,
-      latestReviews: first.latestReviews,
+      opinionatedReviews: first.opinionatedReviews,
     );
   }
 
@@ -381,7 +381,7 @@ List<PrCommit> parseCommitPages(Object? pages) => [
 typedef ThreadPage = ({
   String? author,
   String? headSha,
-  List<ReviewState> latestReviews,
+  List<ReviewState> opinionatedReviews,
   List<ReviewThread> threads,
   String? nextCursor,
 });
@@ -398,7 +398,7 @@ ThreadPage parseThreadPage(Object? data) {
   return (
     author: pr['author']?['login'] as String?,
     headSha: pr['headRefOid'] as String?,
-    latestReviews: [
+    opinionatedReviews: [
       for (final r
           in (pr['latestOpinionatedReviews']?['nodes'] as List?) ?? const [])
         _parseReview(r as Map),

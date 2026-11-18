@@ -43,7 +43,7 @@ ThreadComment _comment(
 PrSnapshot _pr({
   List<PrCommit>? commits,
   List<ReviewThread> threads = const [],
-  List<ReviewState> latestReviews = const [],
+  List<ReviewState> opinionatedReviews = const [],
   String author = 'agent',
 }) {
   final list = commits ?? _linear();
@@ -52,7 +52,7 @@ PrSnapshot _pr({
     headSha: list.last.sha,
     commits: list,
     threads: threads,
-    latestReviews: latestReviews,
+    opinionatedReviews: opinionatedReviews,
   );
 }
 
@@ -363,7 +363,7 @@ void _judgeReadinessTests() {
 
   test('NOT READY when a human reviewer requests changes', () {
     final pr = _pr(
-      latestReviews: const [
+      opinionatedReviews: const [
         ReviewState(
           author: 'matt561',
           isBot: false,
@@ -504,8 +504,8 @@ void _readyCheckerTests() {
     expect(pr.threads.first.comments.single.outdated, isFalse);
     expect(pr.threads.last.comments.single.isBot, isTrue);
     expect(pr.threads.last.comments.single.outdated, isTrue);
-    expect(pr.latestReviews.single.author, 'matt561');
-    expect(pr.latestReviews.single.state, 'CHANGES_REQUESTED');
+    expect(pr.opinionatedReviews.single.author, 'matt561');
+    expect(pr.opinionatedReviews.single.state, 'CHANGES_REQUESTED');
     expect(calls.first, contains('repos/o/r/pulls/7/commits'));
     expect(calls, hasLength(3));
 
