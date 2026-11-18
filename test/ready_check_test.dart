@@ -241,6 +241,20 @@ void _unansweredThreadsTests() {
     expect(unansweredThreads(pr, const {}), hasLength(1));
   });
 
+  test('a follow-up in an outdated thread needs a reply', () {
+    // GitHub marks the whole thread outdated, follow-ups included.
+    final pr = _pr(
+      threads: [
+        thread([
+          _comment('matt561', 0, outdated: true),
+          _comment('agent', 0, outdated: true),
+          _comment('matt561', 1, outdated: true),
+        ]),
+      ],
+    );
+    expect(unansweredThreads(pr, const {}).single.createdAt, _at(1));
+  });
+
   test('an outdated comment with no later commit waits', () {
     final pr = _pr(
       threads: [
@@ -427,7 +441,7 @@ void _readyCheckerTests() {
         'pullRequest': {
           'author': {'login': 'agent'},
           'headRefOid': _c,
-          'latestReviews': {
+          'latestOpinionatedReviews': {
             'nodes': [
               {
                 'state': 'CHANGES_REQUESTED',

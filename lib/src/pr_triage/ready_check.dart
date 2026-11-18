@@ -92,7 +92,9 @@ class ReviewThread {
   final List<ThreadComment> comments;
 }
 
-/// The latest review state of one reviewer, such as `CHANGES_REQUESTED`.
+/// The latest approving or change-requesting review of one reviewer, from
+/// GitHub's `latestOpinionatedReviews`. A later plain comment does not
+/// replace it, unlike in `latestReviews`.
 class ReviewState {
   const ReviewState({
     required this.author,
@@ -164,8 +166,10 @@ Set<String> _answering(PrSnapshot pr, Set<String> answerers) => {
 /// answer.
 ///
 /// A thread waits when its last non-bot comment is by someone other than the
-/// answerers (see [_answering]), unless code answered it: GitHub marks that
-/// comment outdated and a non-merge commit on the PR is dated after it.
+/// answerers (see [_answering]), unless code answered it. Code answers only a
+/// thread with a single human comment, when GitHub marks it outdated and a
+/// non-merge commit on the PR is dated after it. GitHub marks every comment
+/// in a thread outdated together, so a follow-up comment needs a reply.
 /// Threads with only bot comments are skipped.
 List<ThreadComment> unansweredThreads(PrSnapshot pr, Set<String> answerers) {
   final answering = _answering(pr, answerers);
@@ -173,12 +177,12 @@ List<ThreadComment> unansweredThreads(PrSnapshot pr, Set<String> answerers) {
   final out = <ThreadComment>[];
   for (final thread in pr.threads) {
     if (thread.resolved) continue;
-    final humans = thread.comments.where((c) => !c.isBot);
+    final humans = [...thread.comments.where((c) => !c.isBot)];
     if (humans.isEmpty) continue;
     final last = humans.last;
     if (answering.contains(last.author.toLowerCase())) continue;
     final codeAfter = lastCode != null && lastCode.isAfter(last.createdAt);
-    if (last.outdated && codeAfter) continue;
+    if (humans.length == 1 && last.outdated && codeAfter) continue;
     out.add(last);
   }
   return out;
@@ -342,7 +346,7 @@ query($owner: String!, $name: String!, $number: Int!, $cursor: String) {
     pullRequest(number: $number) {
       author { login }
       headRefOid
-      latestReviews(first: 100) {
+      latestOpinionatedReviews(first: 100) {
         nodes { state author { login __typename } }
       }
       reviewThreads(first: 100, after: $cursor) {
@@ -395,7 +399,8 @@ ThreadPage parseThreadPage(Object? data) {
     author: pr['author']?['login'] as String?,
     headSha: pr['headRefOid'] as String?,
     latestReviews: [
-      for (final r in (pr['latestReviews']?['nodes'] as List?) ?? const [])
+      for (final r
+          in (pr['latestOpinionatedReviews']?['nodes'] as List?) ?? const [])
         _parseReview(r as Map),
     ],
     threads: [for (final t in conn['nodes'] as List) _parseThread(t as Map)],
