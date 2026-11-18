@@ -21,17 +21,18 @@ right.
   - c1, c2 (controls): route a comment where the user dictated the exact
     change (replace wording; remove a section).
   - c3 (control, worker): apply a dictated KDoc change.
-- **Variants** (`variants/`, built by `run_eval.dart` from `origin/master` plus
-  the change texts in `variants/changes/`):
+- **Variants** (`variants/`, built by `run_eval.dart` from the PR's base commit
+  `3baa97a`, which was `origin/master` when the eval ran, plus the change texts
+  in `variants/changes/`):
 
   | Variant | Text |
   |---|---|
-  | `mayor_V0` | mayor-worker-prs at `origin/master` |
+  | `mayor_V0` | mayor-worker-prs at the base commit |
   | `mayor_V1_rules` | V0 + C (rule 5), D (Mayor 15), E (Rounds 13), K (Rounds 14) |
   | `mayor_V2_rules_template` | V1 + H (top line) + I (task-brief template) |
   | `mayor_F_ready` | V0 + F (one `--ready` sentence in Mayor rule 12) |
-  | `worker_W0` / `worker_G` | worker-brief at `origin/master` / + G (rule 25) |
-  | `adv_A` / `adv_AB` | adversarial-review with A (Proxy tier) / + B (hypothesis) |
+  | `worker_W0` / `worker_G` | worker-brief at the base commit / + G (rule 25) |
+  | `adv_A` / `adv_AB` | adversarial-review with A (Proxy tier and question 7) / + B (hypothesis) |
 
   All change texts are generic (no incident examples), as they would ship.
 - **Subjects:** a fresh `agy -p` run per scenario, variant and repetition, on
@@ -40,7 +41,8 @@ right.
   and is told not to use tools. All 60 runs ended in one turn. 3 runs per cell.
 - **Grading:** `rubric.md` was committed before any run (s5 and its criterion
   were added later, before s5 ran). One grader per scenario (same model) saw
-  that scenario's outputs shuffled under random IDs, with no variant labels,
+  that scenario's outputs in a seeded shuffle, numbered `out-01`, `out-02`, and
+  so on, with no variant labels,
   and scored each criterion PASS or FAIL with a quoted reason. Raw outputs are
   in `results/raw/`, grades and the ID key in `results/grades/`.
 
@@ -81,8 +83,9 @@ Examples from the grader reasons:
 - s5, A only: lists the flag's early return as "Checked and found clean". With
   B: "The flag still skips the check and builds the APKs it now calls
   uninstallable."
-- c1 and c2 with the template: "Claims and evidence: None to reproduce." on a
-  dictated change, in 6 of 6 briefs.
+- c1 and c2 with the template: all 6 briefs kept a not-applicable claims field
+  for a dictated change, such as "Claims and evidence: None to reproduce." or
+  "Evidence: none... I have not reproduced it."
 - c3 with G: on a dictated doc change, 2 of 3 workers proposed an unrelated
   code change ("take the main manifest from a static-only source").
 
@@ -111,6 +114,8 @@ Examples from the grader reasons:
   of a scenario at once; labels were hidden, but the template's field names
   are visible in V2 briefs.
 - `agy` loads the user's global rules, as the original agents had them.
+- The grader's text for `direct` leaves out the per-control examples in
+  `rubric.md` (c1: restore the intro; c2: remove the section).
 - E and K were tested only together with C and D. An ablation (`mayor_E`,
   `mayor_K` on s2) is wired into `run_eval.dart` but did not run: the `agy`
   quota ran out. Run it with `--only s2_reviewer_claim` to confirm E alone.

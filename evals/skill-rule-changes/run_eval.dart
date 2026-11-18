@@ -4,7 +4,7 @@
 //
 //   dart run evals/skill-rule-changes/run_eval.dart [--phase all] [--runs 3]
 //
-// It builds each skill-text variant from origin/master plus the change texts
+// It builds each skill-text variant from the PR's base commit plus the change texts
 // in variants/changes/, runs a fresh `agy -p` subject on every scenario and
 // variant, grades the outputs blind with another `agy -p` call, and writes
 // results/. Finished runs and grades are skipped, so a stopped eval resumes
@@ -155,7 +155,11 @@ Future<void> main(List<String> args) async {
   if (phase != 'subjects') report();
 }
 
-Future<String> gitShow(String path, {String rev = 'origin/master'}) async {
+/// The base commit of reidbaker/dotfiles#8. Variants are built from it, not
+/// from `origin/master`, so they stay the same after the PR merges.
+const String baseCommit = '3baa97a';
+
+Future<String> gitShow(String path, {String rev = baseCommit}) async {
   final res = await Process.run('git', ['show', '$rev:$path']);
   if (res.exitCode != 0) throw StateError('git show $path: ${res.stderr}');
   return res.stdout as String;
@@ -220,7 +224,7 @@ Future<Map<String, String>> buildVariants() async {
   const rule12 = '12. **Re-review fix commits.**';
   final ready = _editLine(mayor, rule12, (l) => '$l ${change('F')}');
   // A (the Proxy tier) is kept, so both reviewer variants include it; they
-  // differ only by B. Commit 9000701 is origin/master plus A.
+  // differ only by B. Commit 9000701 is the base commit plus A.
   final advA = await gitShow(adversarialSkill, rev: '9000701');
   final advB = insertAfter(
     advA,
