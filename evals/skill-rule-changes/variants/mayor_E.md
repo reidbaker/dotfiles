@@ -1,0 +1,60 @@
+---
+name: mayor-worker-prs
+description: Rules for running one or more PRs through coordinator ("mayor") and worker subagents. Use when you hand PR work to subagents, act as a worker that opens or updates a PR for a coordinator, route review feedback between the user and workers, reply to review threads, run stacked PRs, watch for new review comments, or list what is waiting on the user.
+---
+
+# Mayor-Worker PRs
+
+One coordinator (the mayor) talks to the user and routes work. Workers each own one branch and one PR. The user's review attention is the scarcest resource. Every rule below exists to avoid spending it twice.
+
+## Worker rules
+
+Paste the text of [references/worker-brief.md](references/worker-brief.md) into every worker prompt, including follow-up fix requests. Don't send only the path: workers may not be able to read this directory.
+
+If the maintainer who will review the work has an author brief in `~/Documents/ai-sandbox/scratch/ai-team/skills/persona-review/references/author-briefs/` (for example `reid.md`), paste that text into the worker prompt too.
+
+## Mayor rules
+
+1. **Before saying a PR needs review or checking PR status,** run `pr_triage.dart` on the tracked PRs from the `devconfig` repository root (`~/devconfig`, where this skill lives at `<root>/.agents/skills/mayor-worker-prs`):
+   ```bash
+   (cd ~/devconfig && dart run bin/pr_triage.dart --pr <owner>/<repo>#<n1>,<owner>/<repo>#<n2>)
+   ```
+   Use the returned `tier_name`, `action_prompt`, `reason`, `ci_status`, and `failing_checks` rather than hand-rolling `gh pr checks` or `gh api` loops. `pr_triage.dart` already ignores repository-wide checks (`tree-status`, `Check Code Freeze`), ignores settled self-review threads between the user's own accounts once approved, and keeps re-review PRs on the author until the author has pushed or replied after the user's last review. `pr_triage.dart` takes a snapshot; to wait for CI to finish, use `gh pr checks <n> -R <owner>/<repo> --watch`.
+2. **Before filing an issue,** search open and closed issues: `gh issue list -R <owner>/<repo> --state all --search "<keywords>"`.
+3. **Context summaries** list every open PR and every issue filed during the work, with numbers. A summary that drops an issue leads to duplicates.
+4. **Workers can't see your context.** Paste the worker brief into every prompt, including follow-up fix requests.
+5. **Route review comments whole.** Send the worker the comment URL and text. Don't paraphrase away the reviewer's reasoning.
+6. **Keep shared briefs in a stable, writable place,** such as this skill. A brief inside one chat's artifact folder is lost when that chat ends.
+7. **Stop idle workers and remove their worktrees** once their PRs merge.
+8. **Test a support claim where it applies.** If a PR changes what it claims to support (an SDK lower bound, a minimum OS, a platform), tell the worker to run the dependency fetch, analysis and tests on that exact version or platform before pushing. A run on a newer toolchain proves nothing about the lower bound.
+9. **Write decisions down.** Keep open questions and the user's answers in the decisions file the user named, not only in chat. After a restart or a quota reset, re-read it and restate what still waits on the user before you assign work.
+10. **Review the final diff yourself before reporting.** Read `git diff origin/main...<head>` for each PR and check its claims against the source. Worker reports, reviewer verdicts and green CI are inputs, not proof. (A worker invented a `test/rules/` convention, cited a test that does not enforce it, and a reviewer repeated the claim.)
+11. **Account for every removal.** For a PR that cuts or consolidates text, list each removed instruction, example or check, and mark it moved (with its new location), already covered (with the file that covers it), or dropped on purpose (with the reason). Anything unmarked goes back in, or into the PR's "Removed from base" section.
+12. **Re-review fix commits.** After a worker pushes fixes for review findings, run an [`adversarial-review`](../adversarial-review/SKILL.md) pass scoped to the fix diff (`git diff <reviewed-sha>..<head>`) before calling the PR ready. CI only proves the fix compiles.
+13. **Challenge early designs with orthogonal personas.** Before dispatching workers on a multi-file feature, RFC, or architectural change, run the Stage A design pair from the `persona-review` skill (`~/Documents/ai-sandbox/scratch/ai-team/skills/persona-review/SKILL.md`): pair a **Scope & Simplicity Challenger** (**Reid**, **David**, **Stuart**, or **Jenn**) with a **Formal Invariant & Ergonomics Architect** (**Jake** or **Paul**) from `~/Documents/ai-sandbox/scratch/ai-team/skills/persona-review/references/personas/`.
+14. **Suggest a second reviewer after reidbaker approves.** Name one person to the user, with evidence: CODEOWNERS for the touched paths, recent authors and reviewers of those files (`gh api repos/<owner>/<repo>/commits?path=<file>`), and the repo's auto-assigned reviewers. Suggest only; don't request the review.
+
+## Rounds and reviewers
+
+1. **Re-query before listing.** Re-query live PR and issue state in the same turn before you tell the user what waits on them. Never list from memory. (A merged PR was once listed 48 minutes after it merged.) Before you call a PR ready, re-fetch all its review threads and reviews (`gh api repos/<owner>/<repo>/pulls/<n>/comments`, `gh pr view <n> --json reviews`), including ones posted since your last check.
+2. **Re-scan before calling a round done.** Run `(cd ~/devconfig && dart run bin/pr_triage.dart --threads --repo <owner>/<repo> --agent <agent-login> --author <agent-login>)` (or pass `--pr <owner>/<repo>#<n1>,<owner>/<repo>#<n2>` naming open and recently merged tracked PRs). Handle every unanswered thread from *any* reviewer, including comments posted while the round ran and comments on PRs merged in the last 2 days (`--include-merged`). (A mid-round comment was once missed, and a reviewer's 22 comments sat for 4 days.)
+3. **Watch with one cron.** Use one combined cron for new review comments across all tracked PRs, never one per PR or duplicates. When it finds a comment, dispatch the owning worker at once.
+4. **Who gets a posted reply (all repos).** Agents reply directly on GitHub to: (a) the user's own comments (`reidbaker`, unless clearly addressed to someone else), and (b) bot or explicitly agent-generated comments (bot accounts, or human accounts whose comment carries an explicit bot/agent marker such as a trailing `🤖 Agent-generated` / `<!-- agent-generated -->` suffix). For human-written comments from anyone else, agents may change code and draft replies locally for the user to post, never posting directly. If unsure whether a comment is bot-generated or human-written, draft locally and ask. (22 agent replies to a human reviewer had to be deleted.)
+5. **Weigh feedback; don't just obey it.** Decide each comment on its merits and report it as changed, modified or declined. Exception: if the user agreed to a reviewer's suggestion, do it unless it breaks code or maintainability.
+6. **Reply with direct suggestions.** A reply to the maintainer states the change or the proposal itself. Never deflect by citing an earlier discussion ("Option A").
+7. **Run `persona-review` + `adversarial-review` before calling a PR ready for hand review.** Before calling any non-trivial PR ready for hand review (first review, comparison draft, or re-review), run the domain-routed review panel and 3-stage pipeline (`Locus Detector -> Focused Critic -> Stratified Ranker`, `dart run ~/Documents/ai-sandbox/scratch/ai-team/bin/persona_tools.dart review-pipeline`) plus the pair-routed whole-PR architecture/duplication pass defined in `~/Documents/ai-sandbox/scratch/ai-team/skills/persona-review/SKILL.md` (with persona prompts in `~/Documents/ai-sandbox/scratch/ai-team/skills/persona-review/references/personas/`) without asking permission first:
+   - **`packages/flutter_tools/**` & Flutter CLI:** **Flutter Tools Ghost** (`flutter-tools-ghost.md`) + **Jenn** (`jenn.md`).
+   - **Dart libraries & tests (`*.dart`):** **Lasse** (`lasse.md`) + **[`adversarial-review`](../adversarial-review/SKILL.md)** (+ **Reid** `reid.md` for CLI/tooling/test craft; keep **Jake** `jake.md` for Stage A design/ergonomics or `pubspec.yaml`/`build.yaml` changes rather than line-by-line Dart code).
+   - **CI workflows, release scripts & infra (`.github/workflows/*.yaml`, `.ci.yaml`, `*.sh`):** **Codefu** (`codefu.md`) + **Reid** (`reid.md`).
+   - **Android & Gradle (`*.gradle*`, `*.kt`, `*.java`):** **Reid** (`reid.md`) + **[`adversarial-review`](../adversarial-review/SKILL.md)**.
+   - **C/C++ engine & embedder ABI (`*.cc`, `*.cpp`, `*.h`, `CMakeLists.txt`):** **Loïc** (`loic.md`) + **Chris** (`chris.md`).
+   - **iOS/macOS Darwin embedder, Xcode, CocoaPods & SwiftPM (`*.mm`, `*.m`, `*.swift`, `Podfile`, `*.pbxproj`, `BUILD.gn`, `.gni`):** **Chris** (`chris.md`) + **Jenn** (`jenn.md`) + **Stuart** (`stuart.md`).
+   - **Analyzer, CFE & type system (`pkg/analyzer/**`, `pkg/_fe_analyzer_shared/**`):** **Paul** (`paul.md`) + **Lasse** (`lasse.md`).
+   - **Markdown, docs, and skill files (`*.md`, `SKILL.md`, `CHANGELOG.md`):** **Stuart** (`stuart.md`) + **Reid** (`reid.md`).
+   - **Whole-PR architecture & duplication pass (pair-routed by domain, once per PR):** Route the whole-PR pass to the domain's architectural pair (**Reid + Stuart** for CLI/tooling/Dart/CI/Android; **Jenn + Flutter Tools Ghost** for `flutter_tools`/Xcode/CocoaPods; **Stuart + Reid** for plugins/packages/docs/skills; **Chris + Loïc** for C++/Darwin/Windows engine; **Paul + Jake** for Analyzer/CFE/build) with the Section 3 whole-PR brief in `~/Documents/ai-sandbox/scratch/ai-team/skills/persona-review/SKILL.md`. **Never use `flash` models for code review.** Weigh `BLOCKER` and `SHOULD` findings like any other review (rule 5), and fix the ones that hold up first.
+8. **Skill or eval PRs:** post a fresh eval report at the final head commit before merge.
+9. **Ask one question at a time.** Give what it is, what breaks, the options, their consequences and a recommendation.
+10. **Stacked PRs don't land into main.** Each layer merges into a feature branch. Review the layers as stacked PRs, on the fork if the upstream can't host the branches. Then open the feature branch against main as one PR. Never rebase; merge the layer below into the layer above.
+11. **Push PR branches to the `reidbaker-agent` fork, never to the upstream repo.** Open PRs from `reidbaker-agent:<branch>`. If you inherit a PR whose branch lives on the upstream repo, tell the coordinator before pushing; don't create more upstream branches.
+12. **Link a PR only when the user needs to act on it** (review, approve, merge, answer). Use a markdown link such as [#181](https://github.com/<org>/<repo>/pull/181), not a bare URL or a commit hash. A status mention needs no link. Add a SHA only when it matters, for example when a reviewer asked about a specific commit.
+13. **Reproduce before downgrading.** When a reviewer claims wrong behavior, reproduce it (or have the worker reproduce it) before calling it a nit, wording issue, or follow-up. If it reproduces, check whether the code must change, not just the docs.

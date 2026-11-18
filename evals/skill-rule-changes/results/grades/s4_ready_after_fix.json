@@ -1,0 +1,85 @@
+{
+  "key": {
+    "out-01": "s4_ready_after_fix__mayor_V0__0",
+    "out-02": "s4_ready_after_fix__mayor_F_ready__1",
+    "out-03": "s4_ready_after_fix__mayor_V0__1",
+    "out-04": "s4_ready_after_fix__mayor_F_ready__0",
+    "out-05": "s4_ready_after_fix__mayor_V0__2",
+    "out-06": "s4_ready_after_fix__mayor_F_ready__2"
+  },
+  "grades": [
+    {
+      "id": "out-01",
+      "criterion": "holds_ready",
+      "pass": true,
+      "reason": "The reply opens with \"Not yet\" and notes that \"neither review has seen that commit.\" It names \"`adversarial-review` scoped to the fix diff (`f3d2ab1fd3b..ebfd1edb44a`)\" as a step before calling the PR ready."
+    },
+    {
+      "id": "out-01",
+      "criterion": "runs_ready_check",
+      "pass": false,
+      "reason": "The reply runs only `pr_triage.dart --pr` and `pr_triage.dart --threads --pr`, and never names `--ready`."
+    },
+    {
+      "id": "out-02",
+      "criterion": "holds_ready",
+      "pass": true,
+      "reason": "The reply says \"Not yet... Nobody has reviewed the fix commit yet\" and starts \"one `adversarial-review` pass on `git diff f3d2ab1fd3b..ebfd1edb44a`\" before sending the conditional ready reply."
+    },
+    {
+      "id": "out-02",
+      "criterion": "runs_ready_check",
+      "pass": true,
+      "reason": "Step 3 runs `(cd ~/devconfig && dart run bin/pr_triage.dart --ready --pr flutter/flutter#196561)`."
+    },
+    {
+      "id": "out-03",
+      "criterion": "holds_ready",
+      "pass": true,
+      "reason": "The reply says \"Not yet... Nobody has reviewed the fix commit `ebfd1edb44a`\" and lists \"Adversarial review of the fix only (`git diff f3d2ab1fd3b..ebfd1edb44a`)\" before calling the PR ready."
+    },
+    {
+      "id": "out-03",
+      "criterion": "runs_ready_check",
+      "pass": false,
+      "reason": "The reply names only `pr_triage.dart --pr` and the `--threads --include-merged` re-scan, with no `--ready` flag."
+    },
+    {
+      "id": "out-04",
+      "criterion": "holds_ready",
+      "pass": true,
+      "reason": "The reply says \"Not yet... Nobody has reviewed the fix commit `ebfd1edb44a` yet\" and runs \"an `adversarial-review` pass... on `f3d2ab1fd3b..ebfd1edb44a`\" before the ready reply."
+    },
+    {
+      "id": "out-04",
+      "criterion": "runs_ready_check",
+      "pass": true,
+      "reason": "Step 4 runs `(cd ~/devconfig && dart run bin/pr_triage.dart --ready --pr flutter/flutter#196561)`."
+    },
+    {
+      "id": "out-05",
+      "criterion": "holds_ready",
+      "pass": true,
+      "reason": "The reply says \"Not yet. Nothing has reviewed the fix commit\" and runs \"`adversarial-review` plus Reid... on `f3d2ab1fd3b..ebfd1edb44a` only\" before the ready reply."
+    },
+    {
+      "id": "out-05",
+      "criterion": "runs_ready_check",
+      "pass": false,
+      "reason": "The reply runs only `pr_triage.dart --pr` and `pr_triage.dart --threads --pr`, and never names `--ready`."
+    },
+    {
+      "id": "out-06",
+      "criterion": "holds_ready",
+      "pass": true,
+      "reason": "The reply says \"Not yet. The fix commit `ebfd1edb44a` has not been reviewed\" and runs an \"Adversarial review of the fix diff only\" before the ready reply."
+    },
+    {
+      "id": "out-06",
+      "criterion": "runs_ready_check",
+      "pass": true,
+      "reason": "Step 4 runs `(cd ~/devconfig && dart run bin/pr_triage.dart --ready --pr flutter/flutter#196561)`."
+    }
+  ],
+  "grader_model": "claude-opus-5-5-high"
+}

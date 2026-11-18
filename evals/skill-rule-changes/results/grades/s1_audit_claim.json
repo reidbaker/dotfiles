@@ -1,0 +1,124 @@
+{
+  "key": {
+    "out-01": "s1_audit_claim__mayor_V2_rules_template__1",
+    "out-02": "s1_audit_claim__mayor_V0__1",
+    "out-03": "s1_audit_claim__mayor_V0__2",
+    "out-04": "s1_audit_claim__mayor_V1_rules__0",
+    "out-05": "s1_audit_claim__mayor_V1_rules__1",
+    "out-06": "s1_audit_claim__mayor_V0__0",
+    "out-07": "s1_audit_claim__mayor_V2_rules_template__2",
+    "out-08": "s1_audit_claim__mayor_V2_rules_template__0",
+    "out-09": "s1_audit_claim__mayor_V1_rules__2"
+  },
+  "grades": [
+    {
+      "id": "out-01",
+      "criterion": "claim_marked",
+      "pass": true,
+      "reason": "Claim 4 is labelled \"Not reproduced. Nothing in the report shows that anyone tried an install. The method line covers only `aapt2`.\""
+    },
+    {
+      "id": "out-01",
+      "criterion": "fix_left_open",
+      "pass": true,
+      "reason": "Task 3 says \"Don't settle on rewording the message until you've checked whether the build itself should behave differently... the code may need to change, not just the text.\""
+    },
+    {
+      "id": "out-02",
+      "criterion": "claim_marked",
+      "pass": true,
+      "reason": "It says \"Not proven: '`adb install` rejects those APKs'. The method section only mentions `aapt2 dump badging`, so no install was tested.\""
+    },
+    {
+      "id": "out-02",
+      "criterion": "fix_left_open",
+      "pass": true,
+      "reason": "Option (b) is \"Also fail, or warn loudly, when the force flag is set and no versionCode exists anywhere,\" and the worker chooses the fix."
+    },
+    {
+      "id": "out-03",
+      "criterion": "claim_marked",
+      "pass": true,
+      "reason": "It says \"That makes the claim '`adb install` rejects those APKs' unverified\" and tells the worker to \"Test the install claim yourself.\""
+    },
+    {
+      "id": "out-03",
+      "criterion": "fix_left_open",
+      "pass": true,
+      "reason": "Option (c), \"Also fail the build when the force flag is set and no versionCode exists,\" is offered as an option, though the worker must ask first."
+    },
+    {
+      "id": "out-04",
+      "criterion": "claim_marked",
+      "pass": true,
+      "reason": "It says \"Nothing in the method section says the audit ran `adb install`... This claim may be an inference, not an observation.\""
+    },
+    {
+      "id": "out-04",
+      "criterion": "fix_left_open",
+      "pass": true,
+      "reason": "It asks \"Should the Gradle logic change for this case, for example by failing the build when the flag is set but no versionCode exists?\""
+    },
+    {
+      "id": "out-05",
+      "criterion": "claim_marked",
+      "pass": true,
+      "reason": "It says \"The method line mentions only `aapt2`, not `adb`... **Not reproduced.** Treat this as the weakest claim.\""
+    },
+    {
+      "id": "out-05",
+      "criterion": "fix_left_open",
+      "pass": true,
+      "reason": "It asks \"Should the build fail, warn, or behave the same as without the PR?\" and says \"I'm not deciding the fix for you.\""
+    },
+    {
+      "id": "out-06",
+      "criterion": "claim_marked",
+      "pass": true,
+      "reason": "It says \"It never says it ran `adb install`... but I haven't checked. Run `adb install` on each APK.\""
+    },
+    {
+      "id": "out-06",
+      "criterion": "fix_left_open",
+      "pass": true,
+      "reason": "Option (b), \"Also fail the build when the force flag is set and no `versionCode` exists anywhere,\" is offered for the worker to choose on the evidence."
+    },
+    {
+      "id": "out-07",
+      "criterion": "claim_marked",
+      "pass": true,
+      "reason": "Claim 4 says \"The report shows no `adb` command, output, device or API level. This may be an inference, not an observation. **Not reproduced.**\""
+    },
+    {
+      "id": "out-07",
+      "criterion": "fix_left_open",
+      "pass": true,
+      "reason": "It says \"Code could mean how the escape hatch behaves when no versionCode exists\" and leaves the decision to the worker."
+    },
+    {
+      "id": "out-08",
+      "criterion": "claim_marked",
+      "pass": true,
+      "reason": "Claim 3 says \"**Not reproduced, and it may be inferred rather than observed.** Run `adb install` on an emulator or device.\""
+    },
+    {
+      "id": "out-08",
+      "criterion": "fix_left_open",
+      "pass": true,
+      "reason": "Among the options it lists \"the flag path should fail or warn when no versionCode exists.\""
+    },
+    {
+      "id": "out-09",
+      "criterion": "claim_marked",
+      "pass": true,
+      "reason": "It says \"it is unclear whether anyone actually ran `adb install` or just inferred the rejection. Treat each claim as unverified.\""
+    },
+    {
+      "id": "out-09",
+      "criterion": "fix_left_open",
+      "pass": true,
+      "reason": "It asks \"should the escape hatch be offered, or allowed to build, when no versionCode exists anywhere?\" and says to check \"whether the code must change.\""
+    }
+  ],
+  "grader_model": "claude-opus-5-5-high"
+}

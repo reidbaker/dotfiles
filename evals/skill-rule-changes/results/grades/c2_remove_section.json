@@ -1,0 +1,124 @@
+{
+  "key": {
+    "out-01": "c2_remove_section__mayor_V0__0",
+    "out-02": "c2_remove_section__mayor_V1_rules__0",
+    "out-03": "c2_remove_section__mayor_V2_rules_template__0",
+    "out-04": "c2_remove_section__mayor_V1_rules__2",
+    "out-05": "c2_remove_section__mayor_V2_rules_template__1",
+    "out-06": "c2_remove_section__mayor_V1_rules__1",
+    "out-07": "c2_remove_section__mayor_V2_rules_template__2",
+    "out-08": "c2_remove_section__mayor_V0__2",
+    "out-09": "c2_remove_section__mayor_V0__1"
+  },
+  "grades": [
+    {
+      "id": "out-01",
+      "criterion": "direct",
+      "pass": false,
+      "reason": "Step 1 asks the worker to \"Weigh the comment before you change anything\" and to judge whether removing the text \"leaves a real gap\", and the report allows \"Changed, modified or declined\", so the worker decides whether the docs should change."
+    },
+    {
+      "id": "out-01",
+      "criterion": "no_filler",
+      "pass": true,
+      "reason": "The brief has no empty or N/A fields, and every step (scope, references, checks, push, reply) is about this removal."
+    },
+    {
+      "id": "out-02",
+      "criterion": "direct",
+      "pass": true,
+      "reason": "It states \"The user asked for this exact change, so make it: remove the pre-Flutter-3.16 `ext.kotlin_version` instructions. Don't argue for keeping them.\""
+    },
+    {
+      "id": "out-02",
+      "criterion": "no_filler",
+      "pass": false,
+      "reason": "Step 7 (\"Re-fetch the PR's review threads... List any new or unanswered comment\") has nothing to do with this change, and the \"<AUTHOR-BRIEF: ... if that file exists>\" placeholder is conditional filler."
+    },
+    {
+      "id": "out-03",
+      "criterion": "direct",
+      "pass": true,
+      "reason": "It says \"The user has decided the change: remove the pre-Flutter-3.16 `ext.kotlin_version` instructions\" and lists exact deletions."
+    },
+    {
+      "id": "out-03",
+      "criterion": "no_filler",
+      "pass": false,
+      "reason": "It has a not-applicable \"Claims and evidence\" field (\"you have nothing to reproduce\") and an unrelated instruction about \"an unanswered thread from any other human reviewer\"."
+    },
+    {
+      "id": "out-04",
+      "criterion": "direct",
+      "pass": false,
+      "reason": "Step 3 asks the worker to decide about the FGP sentence: \"Tell me whether it should go with the section or whether any part of it still applies to current projects.\""
+    },
+    {
+      "id": "out-04",
+      "criterion": "no_filler",
+      "pass": false,
+      "reason": "The report asks for \"any other unanswered review threads you saw on #14053\", which has nothing to do with this change."
+    },
+    {
+      "id": "out-05",
+      "criterion": "direct",
+      "pass": true,
+      "reason": "It says \"The user dictated this change, so make it as stated. Remove the whole pre-Flutter-3.16 `ext.kotlin_version` section.\""
+    },
+    {
+      "id": "out-05",
+      "criterion": "no_filler",
+      "pass": false,
+      "reason": "It includes an empty template field: \"Claims and evidence: None to reproduce.\""
+    },
+    {
+      "id": "out-06",
+      "criterion": "direct",
+      "pass": false,
+      "reason": "It says \"Make the change unless it breaks the page or makes it harder to maintain\", which asks the worker to judge whether the docs change should happen at all."
+    },
+    {
+      "id": "out-06",
+      "criterion": "no_filler",
+      "pass": true,
+      "reason": "The brief has no empty or N/A fields, and all steps are about the removal and its reply."
+    },
+    {
+      "id": "out-07",
+      "criterion": "direct",
+      "pass": true,
+      "reason": "It says \"Task: Remove the pre-Flutter 3.16 `ext.kotlin_version` section\" and defines exactly where the section starts and ends."
+    },
+    {
+      "id": "out-07",
+      "criterion": "no_filler",
+      "pass": false,
+      "reason": "It includes a not-applicable \"Claims and evidence\" field: \"The comment does not claim any behavior... Nobody has reproduced it, and you don't need to\"."
+    },
+    {
+      "id": "out-08",
+      "criterion": "direct",
+      "pass": false,
+      "reason": "Step 3 asks the worker to search other breaking-changes pages and \"Remove those only if they are the same old-version guidance\", so the worker decides whether other docs must change."
+    },
+    {
+      "id": "out-08",
+      "criterion": "no_filler",
+      "pass": true,
+      "reason": "The brief has no empty or N/A fields, and its steps all serve this removal and its reply."
+    },
+    {
+      "id": "out-09",
+      "criterion": "direct",
+      "pass": true,
+      "reason": "It says \"Remove the guidance for projects created before Flutter 3.16\" and \"The user asked for this change, so make it... Don't keep the section.\""
+    },
+    {
+      "id": "out-09",
+      "criterion": "no_filler",
+      "pass": true,
+      "reason": "The brief has no empty or N/A template fields, and every instruction relates to the removal, checks, push or reply."
+    }
+  ],
+  "grader_model": "claude-opus-5-5-high"
+}

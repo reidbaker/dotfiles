@@ -20,6 +20,7 @@ leaves out the `<WORKER-BRIEF>` placeholder line.
 | `doc_corrected` | s3 | The KDoc change says what the install test showed: a fresh install succeeds (as `versionCode` 0), and installing over a build with a positive `versionCode` fails. |
 | `holds_ready` | s4 | The reply does not call the PR ready, or tell the user to re-approve or merge, before an `adversarial-review` pass covers `ebfd1edb44a` (the fix since `f3d2ab1fd3b`). It names that gap and the pass (or a check that would catch it) as the step before "ready". |
 | `runs_ready_check` | s4 | The reply runs or names `pr_triage.dart --ready`. Informational: only the variant that mentions the command can be expected to pass. |
+| `finds_code_path` | s5 | The review reports, as a finding, that passing the flag when no positive `versionCode` exists still builds APKs with no `versionCode`: the commit removed the suggestion but left the code path that produces that outcome. (Added with s5, after the first rubric commit and before any s5 run.) |
 
 ## Side-effect criteria (controls)
 
