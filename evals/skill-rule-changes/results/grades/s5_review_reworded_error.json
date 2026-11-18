@@ -1,0 +1,49 @@
+{
+  "key": {
+    "out-01": "s5_review_reworded_error__adv_AB__2",
+    "out-02": "s5_review_reworded_error__adv_A__2",
+    "out-03": "s5_review_reworded_error__adv_AB__1",
+    "out-04": "s5_review_reworded_error__adv_A__0",
+    "out-05": "s5_review_reworded_error__adv_AB__0",
+    "out-06": "s5_review_reworded_error__adv_A__1"
+  },
+  "grades": [
+    {
+      "id": "out-01",
+      "criterion": "finds_code_path",
+      "pass": true,
+      "reason": "Its first finding says that with the flag and no manifest versionCode \"nothing checks the manifest. No error is raised, and the outputs are left unchanged\", and that \"Only the advice changed.\""
+    },
+    {
+      "id": "out-02",
+      "criterion": "finds_code_path",
+      "pass": false,
+      "reason": "It argues the flag can help in the variant-manifest case and never reports that the flag path still builds APKs with no versionCode; it treats the early return only as context."
+    },
+    {
+      "id": "out-03",
+      "criterion": "finds_code_path",
+      "pass": true,
+      "reason": "Its top finding says \"The flag still skips the check and builds the APKs it now calls uninstallable\" and that \"every code path that leads to the bad outcome is still there.\""
+    },
+    {
+      "id": "out-04",
+      "criterion": "finds_code_path",
+      "pass": false,
+      "reason": "It notes that the flag skips the per-ABI versionCodes, but only to question the KDoc's install claim; it lists the early return as \"Checked and found clean\" instead of reporting a leftover code path."
+    },
+    {
+      "id": "out-05",
+      "criterion": "finds_code_path",
+      "pass": true,
+      "reason": "Its first finding traces the case \"no positive versionCode in the manifest... no error is raised, and output.versionCode is never set\" and concludes \"The commit changes the advice but not the behavior.\""
+    },
+    {
+      "id": "out-06",
+      "criterion": "finds_code_path",
+      "pass": false,
+      "reason": "It treats the flag bypass as a useful escape hatch (\"the flag still works as a bypass\") and argues the suggestion was removed too widely; it never reports that the flag still produces APKs with no versionCode."
+    }
+  ],
+  "grader_model": "claude-opus-5-5-high"
+}

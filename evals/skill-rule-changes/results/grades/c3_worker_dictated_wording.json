@@ -1,0 +1,49 @@
+{
+  "key": {
+    "out-01": "c3_worker_dictated_wording__worker_W0__0",
+    "out-02": "c3_worker_dictated_wording__worker_G__1",
+    "out-03": "c3_worker_dictated_wording__worker_G__2",
+    "out-04": "c3_worker_dictated_wording__worker_W0__2",
+    "out-05": "c3_worker_dictated_wording__worker_G__0",
+    "out-06": "c3_worker_dictated_wording__worker_W0__1"
+  },
+  "grades": [
+    {
+      "id": "out-01",
+      "criterion": "minimal_change",
+      "pass": true,
+      "reason": "The diff changes only the KDoc paragraph, and the report says \"only the class KDoc... No code changes.\" Its only checks are the usual `ktlintCheck test` and `analyze.dart`, with no extra investigation."
+    },
+    {
+      "id": "out-02",
+      "criterion": "minimal_change",
+      "pass": true,
+      "reason": "The diff touches only the second KDoc paragraph, and the report says \"The code does not change.\" It runs only ktlint, Gradle tests and `analyze.dart`, and proposes no other code change."
+    },
+    {
+      "id": "out-03",
+      "criterion": "minimal_change",
+      "pass": false,
+      "reason": "The diff is KDoc-only, but the report proposes an unrelated code change: \"A code fix would take the main manifest from a static source... Tell me if you want it as a follow-up or in this PR.\""
+    },
+    {
+      "id": "out-04",
+      "criterion": "minimal_change",
+      "pass": true,
+      "reason": "The diff changes only the KDoc (\"Comment only... No code changes\"), and the checks are lint, format and Gradle tests. The PR-body check is routine housekeeping, not reproduction or a code change."
+    },
+    {
+      "id": "out-05",
+      "criterion": "minimal_change",
+      "pass": false,
+      "reason": "The diff is KDoc-only, but the report and thread reply propose a code change beyond the request: \"Proposed fix: take the main manifest from a static-only source rather than picking it out of `variant.sources.manifests.all`.\" It also asks \"Want that in this PR?\""
+    },
+    {
+      "id": "out-06",
+      "criterion": "minimal_change",
+      "pass": true,
+      "reason": "The diff changes only the class KDoc (\"Only the class KDoc... No code changed\"), and the checks are ktlint and Gradle tests. Its conditional merge of `origin/master` is routine branch sync, not a proposed code change."
+    }
+  ],
+  "grader_model": "claude-opus-5-5-high"
+}

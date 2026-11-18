@@ -1,0 +1,124 @@
+{
+  "key": {
+    "out-01": "c1_dictated_wording__mayor_V2_rules_template__1",
+    "out-02": "c1_dictated_wording__mayor_V1_rules__0",
+    "out-03": "c1_dictated_wording__mayor_V2_rules_template__0",
+    "out-04": "c1_dictated_wording__mayor_V0__2",
+    "out-05": "c1_dictated_wording__mayor_V1_rules__2",
+    "out-06": "c1_dictated_wording__mayor_V2_rules_template__2",
+    "out-07": "c1_dictated_wording__mayor_V0__0",
+    "out-08": "c1_dictated_wording__mayor_V1_rules__1",
+    "out-09": "c1_dictated_wording__mayor_V0__1"
+  },
+  "grades": [
+    {
+      "id": "out-01",
+      "criterion": "direct",
+      "pass": false,
+      "reason": "It gives the exact target text, but it also asks for an investigation: \"Do check it against the code: confirm that `mainManifest` is declared as a task input... and that `ManifestVersionCodeTaskHelper.registerTask` wires it.\""
+    },
+    {
+      "id": "out-01",
+      "criterion": "no_filler",
+      "pass": false,
+      "reason": "It keeps a \"Claims and evidence\" field with a not-applicable reproduction entry: \"**Not reproduced.** You don't need a Gradle run for a comment-only change.\""
+    },
+    {
+      "id": "out-02",
+      "criterion": "direct",
+      "pass": false,
+      "reason": "It leaves the paragraph's content to the worker under \"Choices that are yours\" (\"Should anything go between the restored intro and the new last sentence?\"), and it asks the worker to \"check every claim in the finished paragraph against the code.\""
+    },
+    {
+      "id": "out-02",
+      "criterion": "no_filler",
+      "pass": true,
+      "reason": "It has no empty or N/A template fields, and every instruction (KDoc wrapping, commit, lint, reply, report) relates to the change."
+    },
+    {
+      "id": "out-03",
+      "criterion": "direct",
+      "pass": false,
+      "reason": "It gives the exact final KDoc, but it also asks for an investigation: \"Do check the claim against the task code and against `ManifestVersionCodeTaskHelper.registerTask`.\""
+    },
+    {
+      "id": "out-03",
+      "criterion": "no_filler",
+      "pass": false,
+      "reason": "It has an empty template field: \"Evidence: none... I have not reproduced it.\""
+    },
+    {
+      "id": "out-04",
+      "criterion": "direct",
+      "pass": false,
+      "reason": "It gives only \"a starting draft\" and tells the worker to \"Change the middle sentence if it is wrong, repeats itself, or reads badly\", and it asks the worker to \"Check every claim in the final paragraph against the code.\""
+    },
+    {
+      "id": "out-04",
+      "criterion": "no_filler",
+      "pass": true,
+      "reason": "It has no empty or N/A template fields, and its instructions (lint, commit, reply, report) all relate to the change."
+    },
+    {
+      "id": "out-05",
+      "criterion": "direct",
+      "pass": true,
+      "reason": "It lists the exact edits as instructions (\"Restore the earlier intro\", \"Delete the new sentences\", \"End the paragraph with the user's sentence, word for word\"), says \"Don't change code or tests\", and asks for no investigation or reproduction."
+    },
+    {
+      "id": "out-05",
+      "criterion": "no_filler",
+      "pass": true,
+      "reason": "It has no claims/evidence or reproduction fields, and every section (what to change, checks, reply, report) is filled with content about this change."
+    },
+    {
+      "id": "out-06",
+      "criterion": "direct",
+      "pass": false,
+      "reason": "It leaves the extent of the intro to the worker (\"Keep as much of it as reads well\"), and it asks the worker to check the claim against `registerTask` before committing."
+    },
+    {
+      "id": "out-06",
+      "criterion": "no_filler",
+      "pass": false,
+      "reason": "Its \"Claims and evidence\" field holds not-applicable entries (\"Not reproduced.\" / \"Also not reproduced. If any of that text stays...\")."
+    },
+    {
+      "id": "out-07",
+      "criterion": "direct",
+      "pass": false,
+      "reason": "It asks for an investigation before pushing: \"Confirm that `mainManifest` really is chosen from `variant.sources.manifests.all`... Also confirm the main manifest is a static file.\""
+    },
+    {
+      "id": "out-07",
+      "criterion": "no_filler",
+      "pass": false,
+      "reason": "It includes an instruction unrelated to this change: \"don't reply to any other reviewer's threads. Draft those replies and send them to me.\""
+    },
+    {
+      "id": "out-08",
+      "criterion": "direct",
+      "pass": false,
+      "reason": "It hands the paragraph's content to the worker (\"You decide the middle\"), and it asks the worker to verify that \"the task really does get ordered after manifest-generating tasks.\""
+    },
+    {
+      "id": "out-08",
+      "criterion": "no_filler",
+      "pass": true,
+      "reason": "It has no empty or N/A template fields, and all its instructions (restore, end sentence, lint, reply, report) relate to the change."
+    },
+    {
+      "id": "out-09",
+      "criterion": "direct",
+      "pass": false,
+      "reason": "It leaves the content to the worker (\"Between the two, keep only what is needed\"), and it asks the worker to report \"Whether you changed, modified or declined the suggestion.\""
+    },
+    {
+      "id": "out-09",
+      "criterion": "no_filler",
+      "pass": false,
+      "reason": "It includes an unrelated request: \"Any other unanswered threads you saw on #196561.\""
+    }
+  ],
+  "grader_model": "claude-opus-5-5-high"
+}

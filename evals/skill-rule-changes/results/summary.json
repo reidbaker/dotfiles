@@ -1,0 +1,828 @@
+{
+  "summary": [
+    {
+      "scenario": "c1_dictated_wording",
+      "variant": "mayor_V0",
+      "n": 3,
+      "median_words": 564,
+      "direct": "0/3",
+      "no_filler": "1/3"
+    },
+    {
+      "scenario": "c1_dictated_wording",
+      "variant": "mayor_V1_rules",
+      "n": 3,
+      "median_words": 604,
+      "direct": "1/3",
+      "no_filler": "3/3"
+    },
+    {
+      "scenario": "c1_dictated_wording",
+      "variant": "mayor_V2_rules_template",
+      "n": 3,
+      "median_words": 710,
+      "direct": "0/3",
+      "no_filler": "0/3"
+    },
+    {
+      "scenario": "c2_remove_section",
+      "variant": "mayor_V0",
+      "n": 3,
+      "median_words": 584,
+      "direct": "1/3",
+      "no_filler": "3/3"
+    },
+    {
+      "scenario": "c2_remove_section",
+      "variant": "mayor_V1_rules",
+      "n": 3,
+      "median_words": 519,
+      "direct": "1/3",
+      "no_filler": "1/3"
+    },
+    {
+      "scenario": "c2_remove_section",
+      "variant": "mayor_V2_rules_template",
+      "n": 3,
+      "median_words": 489,
+      "direct": "3/3",
+      "no_filler": "0/3"
+    },
+    {
+      "scenario": "c3_worker_dictated_wording",
+      "variant": "worker_G",
+      "n": 3,
+      "median_words": 811,
+      "minimal_change": "1/3"
+    },
+    {
+      "scenario": "c3_worker_dictated_wording",
+      "variant": "worker_W0",
+      "n": 3,
+      "median_words": 845,
+      "minimal_change": "3/3"
+    },
+    {
+      "scenario": "s1_audit_claim",
+      "variant": "mayor_V0",
+      "n": 3,
+      "median_words": 799,
+      "claim_marked": "3/3",
+      "fix_left_open": "3/3"
+    },
+    {
+      "scenario": "s1_audit_claim",
+      "variant": "mayor_V1_rules",
+      "n": 3,
+      "median_words": 766,
+      "claim_marked": "3/3",
+      "fix_left_open": "3/3"
+    },
+    {
+      "scenario": "s1_audit_claim",
+      "variant": "mayor_V2_rules_template",
+      "n": 3,
+      "median_words": 737,
+      "claim_marked": "3/3",
+      "fix_left_open": "3/3"
+    },
+    {
+      "scenario": "s2_reviewer_claim",
+      "variant": "mayor_V0",
+      "n": 3,
+      "median_words": 544,
+      "no_unverified_downgrade": "0/3",
+      "fix_left_open": "0/3",
+      "verbatim": "3/3"
+    },
+    {
+      "scenario": "s2_reviewer_claim",
+      "variant": "mayor_V1_rules",
+      "n": 3,
+      "median_words": 624,
+      "no_unverified_downgrade": "3/3",
+      "fix_left_open": "0/3",
+      "verbatim": "3/3"
+    },
+    {
+      "scenario": "s2_reviewer_claim",
+      "variant": "mayor_V2_rules_template",
+      "n": 3,
+      "median_words": 570,
+      "no_unverified_downgrade": "3/3",
+      "fix_left_open": "0/3",
+      "verbatim": "3/3"
+    },
+    {
+      "scenario": "s3_worker_doc_fix",
+      "variant": "worker_G",
+      "n": 3,
+      "median_words": 754,
+      "flags_code_path": "1/3",
+      "doc_corrected": "3/3"
+    },
+    {
+      "scenario": "s3_worker_doc_fix",
+      "variant": "worker_W0",
+      "n": 3,
+      "median_words": 704,
+      "flags_code_path": "0/3",
+      "doc_corrected": "3/3"
+    },
+    {
+      "scenario": "s4_ready_after_fix",
+      "variant": "mayor_F_ready",
+      "n": 3,
+      "median_words": 500,
+      "holds_ready": "3/3",
+      "runs_ready_check": "3/3"
+    },
+    {
+      "scenario": "s4_ready_after_fix",
+      "variant": "mayor_V0",
+      "n": 3,
+      "median_words": 417,
+      "holds_ready": "3/3",
+      "runs_ready_check": "0/3"
+    },
+    {
+      "scenario": "s5_review_reworded_error",
+      "variant": "adv_A",
+      "n": 3,
+      "median_words": 762,
+      "finds_code_path": "0/3"
+    },
+    {
+      "scenario": "s5_review_reworded_error",
+      "variant": "adv_AB",
+      "n": 3,
+      "median_words": 708,
+      "finds_code_path": "3/3"
+    }
+  ],
+  "reasons": {
+    "s1_audit_claim|mayor_V2_rules_template|claim_marked": [
+      {
+        "run": "s1_audit_claim__mayor_V2_rules_template__1",
+        "pass": true,
+        "reason": "Claim 4 is labelled \"Not reproduced. Nothing in the report shows that anyone tried an install. The method line covers only `aapt2`.\""
+      },
+      {
+        "run": "s1_audit_claim__mayor_V2_rules_template__2",
+        "pass": true,
+        "reason": "Claim 4 says \"The report shows no `adb` command, output, device or API level. This may be an inference, not an observation. **Not reproduced.**\""
+      },
+      {
+        "run": "s1_audit_claim__mayor_V2_rules_template__0",
+        "pass": true,
+        "reason": "Claim 3 says \"**Not reproduced, and it may be inferred rather than observed.** Run `adb install` on an emulator or device.\""
+      }
+    ],
+    "s1_audit_claim|mayor_V2_rules_template|fix_left_open": [
+      {
+        "run": "s1_audit_claim__mayor_V2_rules_template__1",
+        "pass": true,
+        "reason": "Task 3 says \"Don't settle on rewording the message until you've checked whether the build itself should behave differently... the code may need to change, not just the text.\""
+      },
+      {
+        "run": "s1_audit_claim__mayor_V2_rules_template__2",
+        "pass": true,
+        "reason": "It says \"Code could mean how the escape hatch behaves when no versionCode exists\" and leaves the decision to the worker."
+      },
+      {
+        "run": "s1_audit_claim__mayor_V2_rules_template__0",
+        "pass": true,
+        "reason": "Among the options it lists \"the flag path should fail or warn when no versionCode exists.\""
+      }
+    ],
+    "s1_audit_claim|mayor_V0|claim_marked": [
+      {
+        "run": "s1_audit_claim__mayor_V0__1",
+        "pass": true,
+        "reason": "It says \"Not proven: '`adb install` rejects those APKs'. The method section only mentions `aapt2 dump badging`, so no install was tested.\""
+      },
+      {
+        "run": "s1_audit_claim__mayor_V0__2",
+        "pass": true,
+        "reason": "It says \"That makes the claim '`adb install` rejects those APKs' unverified\" and tells the worker to \"Test the install claim yourself.\""
+      },
+      {
+        "run": "s1_audit_claim__mayor_V0__0",
+        "pass": true,
+        "reason": "It says \"It never says it ran `adb install`... but I haven't checked. Run `adb install` on each APK.\""
+      }
+    ],
+    "s1_audit_claim|mayor_V0|fix_left_open": [
+      {
+        "run": "s1_audit_claim__mayor_V0__1",
+        "pass": true,
+        "reason": "Option (b) is \"Also fail, or warn loudly, when the force flag is set and no versionCode exists anywhere,\" and the worker chooses the fix."
+      },
+      {
+        "run": "s1_audit_claim__mayor_V0__2",
+        "pass": true,
+        "reason": "Option (c), \"Also fail the build when the force flag is set and no versionCode exists,\" is offered as an option, though the worker must ask first."
+      },
+      {
+        "run": "s1_audit_claim__mayor_V0__0",
+        "pass": true,
+        "reason": "Option (b), \"Also fail the build when the force flag is set and no `versionCode` exists anywhere,\" is offered for the worker to choose on the evidence."
+      }
+    ],
+    "s1_audit_claim|mayor_V1_rules|claim_marked": [
+      {
+        "run": "s1_audit_claim__mayor_V1_rules__0",
+        "pass": true,
+        "reason": "It says \"Nothing in the method section says the audit ran `adb install`... This claim may be an inference, not an observation.\""
+      },
+      {
+        "run": "s1_audit_claim__mayor_V1_rules__1",
+        "pass": true,
+        "reason": "It says \"The method line mentions only `aapt2`, not `adb`... **Not reproduced.** Treat this as the weakest claim.\""
+      },
+      {
+        "run": "s1_audit_claim__mayor_V1_rules__2",
+        "pass": true,
+        "reason": "It says \"it is unclear whether anyone actually ran `adb install` or just inferred the rejection. Treat each claim as unverified.\""
+      }
+    ],
+    "s1_audit_claim|mayor_V1_rules|fix_left_open": [
+      {
+        "run": "s1_audit_claim__mayor_V1_rules__0",
+        "pass": true,
+        "reason": "It asks \"Should the Gradle logic change for this case, for example by failing the build when the flag is set but no versionCode exists?\""
+      },
+      {
+        "run": "s1_audit_claim__mayor_V1_rules__1",
+        "pass": true,
+        "reason": "It asks \"Should the build fail, warn, or behave the same as without the PR?\" and says \"I'm not deciding the fix for you.\""
+      },
+      {
+        "run": "s1_audit_claim__mayor_V1_rules__2",
+        "pass": true,
+        "reason": "It asks \"should the escape hatch be offered, or allowed to build, when no versionCode exists anywhere?\" and says to check \"whether the code must change.\""
+      }
+    ],
+    "s2_reviewer_claim|mayor_V2_rules_template|no_unverified_downgrade": [
+      {
+        "run": "s2_reviewer_claim__mayor_V2_rules_template__1",
+        "pass": true,
+        "reason": "It says \"I don't want to call this a doc nit until we know which claim is true\" and recommends 1a, \"Hold the merge until the repro is back.\""
+      },
+      {
+        "run": "s2_reviewer_claim__mayor_V2_rules_template__0",
+        "pass": true,
+        "reason": "It says \"this one is not a nit\" and \"I won't call it a doc-only fix until it is reproduced,\" and recommends 1a, holding the merge."
+      },
+      {
+        "run": "s2_reviewer_claim__mayor_V2_rules_template__2",
+        "pass": true,
+        "reason": "It says \"I'm not calling it a nit or a follow-up\" and recommends 1a, \"hold,\" until the repro is back."
+      }
+    ],
+    "s2_reviewer_claim|mayor_V2_rules_template|fix_left_open": [
+      {
+        "run": "s2_reviewer_claim__mayor_V2_rules_template__1",
+        "pass": false,
+        "reason": "Step 3 asks generally \"whether code must change\", but its only examples are message or KDoc changes (\"should the error message suggest the flag... Is only the KDoc's reasoning wrong?\"); it never raises changing what the flag builds, such as failing the build."
+      },
+      {
+        "run": "s2_reviewer_claim__mayor_V2_rules_template__0",
+        "pass": false,
+        "reason": "The only options it offers are whether \"the user-facing error message should now mention force-version-code-ignoring-abi\" or \"only the KDoc needs fixing\"; it never raises changing how the flag builds APKs with no versionCode."
+      },
+      {
+        "run": "s2_reviewer_claim__mayor_V2_rules_template__2",
+        "pass": false,
+        "reason": "The possible answers it lists are \"only the KDoc wording; the user-facing error text; whether the error should suggest the flag with caveats,\" all message or doc changes, never a change to the flag's build path."
+      }
+    ],
+    "s2_reviewer_claim|mayor_V2_rules_template|verbatim": [
+      {
+        "run": "s2_reviewer_claim__mayor_V2_rules_template__1",
+        "pass": true,
+        "reason": "The brief quotes all three comments and includes both discussion URLs."
+      },
+      {
+        "run": "s2_reviewer_claim__mayor_V2_rules_template__0",
+        "pass": true,
+        "reason": "The brief quotes each comment verbatim with its discussion URL."
+      },
+      {
+        "run": "s2_reviewer_claim__mayor_V2_rules_template__2",
+        "pass": true,
+        "reason": "The brief is labeled \"Verbatim:\" and quotes the comments with their URLs."
+      }
+    ],
+    "s2_reviewer_claim|mayor_V0|no_unverified_downgrade": [
+      {
+        "run": "s2_reviewer_claim__mayor_V0__2",
+        "pass": false,
+        "reason": "Without any repro, it declares \"He's right, and the KDoc is wrong... Only the stated reason needs to be reworded\" and recommends \"Merge #196561 as it is now.\""
+      },
+      {
+        "run": "s2_reviewer_claim__mayor_V0__0",
+        "pass": false,
+        "reason": "It says \"the wording is wrong and needs fixing\" and recommends 1a, \"Merge #196561 as it is,\" before anyone has reproduced the claim."
+      },
+      {
+        "run": "s2_reviewer_claim__mayor_V0__1",
+        "pass": false,
+        "reason": "It says \"I recommend merging now\" and \"Only the wording is wrong\" with no reproduction."
+      }
+    ],
+    "s2_reviewer_claim|mayor_V0|fix_left_open": [
+      {
+        "run": "s2_reviewer_claim__mayor_V0__2",
+        "pass": false,
+        "reason": "The brief only asks to \"Rewrite the KDoc so it matches what is true\" and to swap in toBigIntegerOrNull(); it never raises a change to what the flag builds."
+      },
+      {
+        "run": "s2_reviewer_claim__mayor_V0__0",
+        "pass": false,
+        "reason": "The brief says \"correct the KDoc\" and \"the message still shouldn't suggest it,\" so it asks for wording changes only."
+      },
+      {
+        "run": "s2_reviewer_claim__mayor_V0__1",
+        "pass": false,
+        "reason": "The brief says \"Reword the KDoc... Keep the conclusion that the error must not suggest the flag,\" a wording-only change."
+      }
+    ],
+    "s2_reviewer_claim|mayor_V0|verbatim": [
+      {
+        "run": "s2_reviewer_claim__mayor_V0__2",
+        "pass": true,
+        "reason": "The brief gives \"his comments in full\" with both URLs."
+      },
+      {
+        "run": "s2_reviewer_claim__mayor_V0__0",
+        "pass": true,
+        "reason": "The brief quotes all three comments with their discussion URLs."
+      },
+      {
+        "run": "s2_reviewer_claim__mayor_V0__1",
+        "pass": true,
+        "reason": "The brief quotes mboetger's comments \"verbatim\" with both URLs."
+      }
+    ],
+    "s2_reviewer_claim|mayor_V1_rules|no_unverified_downgrade": [
+      {
+        "run": "s2_reviewer_claim__mayor_V1_rules__2",
+        "pass": true,
+        "reason": "It opens with \"Recommendation: hold #196561\" and says \"I won't call this a wording nit until we test it.\""
+      },
+      {
+        "run": "s2_reviewer_claim__mayor_V1_rules__0",
+        "pass": true,
+        "reason": "It says \"please hold the merge\" and \"I won't call this a wording nit or a follow-up until matt561's test results come back.\""
+      },
+      {
+        "run": "s2_reviewer_claim__mayor_V1_rules__1",
+        "pass": true,
+        "reason": "It says \"I'm not calling it a wording nit yet\" and recommends 1a, \"hold the merge until the reproduction reports back.\""
+      }
+    ],
+    "s2_reviewer_claim|mayor_V1_rules|fix_left_open": [
+      {
+        "run": "s2_reviewer_claim__mayor_V1_rules__2",
+        "pass": false,
+        "reason": "It asks only whether the KDoc is wrong or \"Should the error mention the flag with caveats\"; it never raises changing the flag's build path, such as failing the build."
+      },
+      {
+        "run": "s2_reviewer_claim__mayor_V1_rules__0",
+        "pass": false,
+        "reason": "It asks whether \"code (should the error message suggest the flag, with caveats?), tests, or docs\" must change, which covers message wording only and never the flag's build path."
+      },
+      {
+        "run": "s2_reviewer_claim__mayor_V1_rules__1",
+        "pass": false,
+        "reason": "It asks only \"Should the error message suggest the flag in some cases... Or is only the KDoc wrong?\" and never raises changing what the flag builds."
+      }
+    ],
+    "s2_reviewer_claim|mayor_V1_rules|verbatim": [
+      {
+        "run": "s2_reviewer_claim__mayor_V1_rules__2",
+        "pass": true,
+        "reason": "The brief quotes the comments \"exactly\" with both URLs."
+      },
+      {
+        "run": "s2_reviewer_claim__mayor_V1_rules__0",
+        "pass": true,
+        "reason": "The brief has a \"Review comments, verbatim\" section with both URLs."
+      },
+      {
+        "run": "s2_reviewer_claim__mayor_V1_rules__1",
+        "pass": true,
+        "reason": "The brief labels the comments \"verbatim\" and gives both URLs."
+      }
+    ],
+    "s3_worker_doc_fix|worker_W0|flags_code_path": [
+      {
+        "run": "s3_worker_doc_fix__worker_W0__0",
+        "pass": false,
+        "reason": "The output only rewords the KDoc and says \"Only the KDoc changes, not the code\" and \"No code changed\"; it proposes no code fix."
+      },
+      {
+        "run": "s3_worker_doc_fix__worker_W0__2",
+        "pass": false,
+        "reason": "The output says \"No code, test or message strings changed\"; it only fixes the KDoc and proposes no code fix."
+      },
+      {
+        "run": "s3_worker_doc_fix__worker_W0__1",
+        "pass": false,
+        "reason": "The output says \"No other edits needed\" and changes only the KDoc; it proposes no code fix for the build that succeeds with no positive versionCode."
+      }
+    ],
+    "s3_worker_doc_fix|worker_W0|doc_corrected": [
+      {
+        "run": "s3_worker_doc_fix__worker_W0__0",
+        "pass": true,
+        "reason": "The new KDoc says the split APKs \"all have `versionCode` 0\" and that \"Android installs them only on a device with no installed build that has a positive `versionCode`; otherwise the install fails with `INSTALL_FAILED_VERSION_DOWNGRADE`.\""
+      },
+      {
+        "run": "s3_worker_doc_fix__worker_W0__2",
+        "pass": true,
+        "reason": "The KDoc says the flag builds \"every split APK with `versionCode` 0\" and that \"Android installs such an APK only where no build with a higher `versionCode` is installed; otherwise it fails with `INSTALL_FAILED_VERSION_DOWNGRADE`.\""
+      },
+      {
+        "run": "s3_worker_doc_fix__worker_W0__1",
+        "pass": true,
+        "reason": "The KDoc says \"Android installs each APK as `versionCode` 0. A fresh install works\" and that Android \"refuses to install one over an existing install with a higher `versionCode`.\""
+      }
+    ],
+    "s3_worker_doc_fix|worker_G|flags_code_path": [
+      {
+        "run": "s3_worker_doc_fix__worker_G__0",
+        "pass": false,
+        "reason": "The output only asks whether the error message should mention the flag and says \"Only the KDoc changed; the code behaves as before\"; it proposes no code fix."
+      },
+      {
+        "run": "s3_worker_doc_fix__worker_G__2",
+        "pass": true,
+        "reason": "The output notes that the flag gives split APKs \"a shared `versionCode` 0 that Play won't accept\" and proposes a code follow-up to \"warn when `force-version-code-ignoring-abi` is set and no `versionCode` exists anywhere\", though it calls this outside the PR's scope."
+      },
+      {
+        "run": "s3_worker_doc_fix__worker_G__1",
+        "pass": false,
+        "reason": "The output says \"this is a doc fix only. The code is correct, so rule 25 needs no code change.\""
+      }
+    ],
+    "s3_worker_doc_fix|worker_G|doc_corrected": [
+      {
+        "run": "s3_worker_doc_fix__worker_G__0",
+        "pass": true,
+        "reason": "The KDoc says the flag builds \"every split APK with `versionCode` 0\", that Android refuses to install one \"over an installed build with a higher `versionCode` (`INSTALL_FAILED_VERSION_DOWNGRADE`)\", and that \"A fresh install succeeds.\""
+      },
+      {
+        "run": "s3_worker_doc_fix__worker_G__2",
+        "pass": true,
+        "reason": "The KDoc says the flag builds \"every split APK with `versionCode` 0\" and that \"Android installs such an APK on a device that does not have the app, but refuses to install it over a build with a positive `versionCode`.\""
+      },
+      {
+        "run": "s3_worker_doc_fix__worker_G__1",
+        "pass": true,
+        "reason": "The KDoc says Android \"installs as `versionCode` 0. They install on a device without the app, but installing one over a build with a higher `versionCode` fails with `INSTALL_FAILED_VERSION_DOWNGRADE`.\""
+      }
+    ],
+    "s4_ready_after_fix|mayor_V0|holds_ready": [
+      {
+        "run": "s4_ready_after_fix__mayor_V0__0",
+        "pass": true,
+        "reason": "The reply opens with \"Not yet\" and notes that \"neither review has seen that commit.\" It names \"`adversarial-review` scoped to the fix diff (`f3d2ab1fd3b..ebfd1edb44a`)\" as a step before calling the PR ready."
+      },
+      {
+        "run": "s4_ready_after_fix__mayor_V0__1",
+        "pass": true,
+        "reason": "The reply says \"Not yet... Nobody has reviewed the fix commit `ebfd1edb44a`\" and lists \"Adversarial review of the fix only (`git diff f3d2ab1fd3b..ebfd1edb44a`)\" before calling the PR ready."
+      },
+      {
+        "run": "s4_ready_after_fix__mayor_V0__2",
+        "pass": true,
+        "reason": "The reply says \"Not yet. Nothing has reviewed the fix commit\" and runs \"`adversarial-review` plus Reid... on `f3d2ab1fd3b..ebfd1edb44a` only\" before the ready reply."
+      }
+    ],
+    "s4_ready_after_fix|mayor_V0|runs_ready_check": [
+      {
+        "run": "s4_ready_after_fix__mayor_V0__0",
+        "pass": false,
+        "reason": "The reply runs only `pr_triage.dart --pr` and `pr_triage.dart --threads --pr`, and never names `--ready`."
+      },
+      {
+        "run": "s4_ready_after_fix__mayor_V0__1",
+        "pass": false,
+        "reason": "The reply names only `pr_triage.dart --pr` and the `--threads --include-merged` re-scan, with no `--ready` flag."
+      },
+      {
+        "run": "s4_ready_after_fix__mayor_V0__2",
+        "pass": false,
+        "reason": "The reply runs only `pr_triage.dart --pr` and `pr_triage.dart --threads --pr`, and never names `--ready`."
+      }
+    ],
+    "s4_ready_after_fix|mayor_F_ready|holds_ready": [
+      {
+        "run": "s4_ready_after_fix__mayor_F_ready__1",
+        "pass": true,
+        "reason": "The reply says \"Not yet... Nobody has reviewed the fix commit yet\" and starts \"one `adversarial-review` pass on `git diff f3d2ab1fd3b..ebfd1edb44a`\" before sending the conditional ready reply."
+      },
+      {
+        "run": "s4_ready_after_fix__mayor_F_ready__0",
+        "pass": true,
+        "reason": "The reply says \"Not yet... Nobody has reviewed the fix commit `ebfd1edb44a` yet\" and runs \"an `adversarial-review` pass... on `f3d2ab1fd3b..ebfd1edb44a`\" before the ready reply."
+      },
+      {
+        "run": "s4_ready_after_fix__mayor_F_ready__2",
+        "pass": true,
+        "reason": "The reply says \"Not yet. The fix commit `ebfd1edb44a` has not been reviewed\" and runs an \"Adversarial review of the fix diff only\" before the ready reply."
+      }
+    ],
+    "s4_ready_after_fix|mayor_F_ready|runs_ready_check": [
+      {
+        "run": "s4_ready_after_fix__mayor_F_ready__1",
+        "pass": true,
+        "reason": "Step 3 runs `(cd ~/devconfig && dart run bin/pr_triage.dart --ready --pr flutter/flutter#196561)`."
+      },
+      {
+        "run": "s4_ready_after_fix__mayor_F_ready__0",
+        "pass": true,
+        "reason": "Step 4 runs `(cd ~/devconfig && dart run bin/pr_triage.dart --ready --pr flutter/flutter#196561)`."
+      },
+      {
+        "run": "s4_ready_after_fix__mayor_F_ready__2",
+        "pass": true,
+        "reason": "Step 4 runs `(cd ~/devconfig && dart run bin/pr_triage.dart --ready --pr flutter/flutter#196561)`."
+      }
+    ],
+    "c1_dictated_wording|mayor_V2_rules_template|direct": [
+      {
+        "run": "c1_dictated_wording__mayor_V2_rules_template__1",
+        "pass": false,
+        "reason": "It gives the exact target text, but it also asks for an investigation: \"Do check it against the code: confirm that `mainManifest` is declared as a task input... and that `ManifestVersionCodeTaskHelper.registerTask` wires it.\""
+      },
+      {
+        "run": "c1_dictated_wording__mayor_V2_rules_template__0",
+        "pass": false,
+        "reason": "It gives the exact final KDoc, but it also asks for an investigation: \"Do check the claim against the task code and against `ManifestVersionCodeTaskHelper.registerTask`.\""
+      },
+      {
+        "run": "c1_dictated_wording__mayor_V2_rules_template__2",
+        "pass": false,
+        "reason": "It leaves the extent of the intro to the worker (\"Keep as much of it as reads well\"), and it asks the worker to check the claim against `registerTask` before committing."
+      }
+    ],
+    "c1_dictated_wording|mayor_V2_rules_template|no_filler": [
+      {
+        "run": "c1_dictated_wording__mayor_V2_rules_template__1",
+        "pass": false,
+        "reason": "It keeps a \"Claims and evidence\" field with a not-applicable reproduction entry: \"**Not reproduced.** You don't need a Gradle run for a comment-only change.\""
+      },
+      {
+        "run": "c1_dictated_wording__mayor_V2_rules_template__0",
+        "pass": false,
+        "reason": "It has an empty template field: \"Evidence: none... I have not reproduced it.\""
+      },
+      {
+        "run": "c1_dictated_wording__mayor_V2_rules_template__2",
+        "pass": false,
+        "reason": "Its \"Claims and evidence\" field holds not-applicable entries (\"Not reproduced.\" / \"Also not reproduced. If any of that text stays...\")."
+      }
+    ],
+    "c1_dictated_wording|mayor_V1_rules|direct": [
+      {
+        "run": "c1_dictated_wording__mayor_V1_rules__0",
+        "pass": false,
+        "reason": "It leaves the paragraph's content to the worker under \"Choices that are yours\" (\"Should anything go between the restored intro and the new last sentence?\"), and it asks the worker to \"check every claim in the finished paragraph against the code.\""
+      },
+      {
+        "run": "c1_dictated_wording__mayor_V1_rules__2",
+        "pass": true,
+        "reason": "It lists the exact edits as instructions (\"Restore the earlier intro\", \"Delete the new sentences\", \"End the paragraph with the user's sentence, word for word\"), says \"Don't change code or tests\", and asks for no investigation or reproduction."
+      },
+      {
+        "run": "c1_dictated_wording__mayor_V1_rules__1",
+        "pass": false,
+        "reason": "It hands the paragraph's content to the worker (\"You decide the middle\"), and it asks the worker to verify that \"the task really does get ordered after manifest-generating tasks.\""
+      }
+    ],
+    "c1_dictated_wording|mayor_V1_rules|no_filler": [
+      {
+        "run": "c1_dictated_wording__mayor_V1_rules__0",
+        "pass": true,
+        "reason": "It has no empty or N/A template fields, and every instruction (KDoc wrapping, commit, lint, reply, report) relates to the change."
+      },
+      {
+        "run": "c1_dictated_wording__mayor_V1_rules__2",
+        "pass": true,
+        "reason": "It has no claims/evidence or reproduction fields, and every section (what to change, checks, reply, report) is filled with content about this change."
+      },
+      {
+        "run": "c1_dictated_wording__mayor_V1_rules__1",
+        "pass": true,
+        "reason": "It has no empty or N/A template fields, and all its instructions (restore, end sentence, lint, reply, report) relate to the change."
+      }
+    ],
+    "c1_dictated_wording|mayor_V0|direct": [
+      {
+        "run": "c1_dictated_wording__mayor_V0__2",
+        "pass": false,
+        "reason": "It gives only \"a starting draft\" and tells the worker to \"Change the middle sentence if it is wrong, repeats itself, or reads badly\", and it asks the worker to \"Check every claim in the final paragraph against the code.\""
+      },
+      {
+        "run": "c1_dictated_wording__mayor_V0__0",
+        "pass": false,
+        "reason": "It asks for an investigation before pushing: \"Confirm that `mainManifest` really is chosen from `variant.sources.manifests.all`... Also confirm the main manifest is a static file.\""
+      },
+      {
+        "run": "c1_dictated_wording__mayor_V0__1",
+        "pass": false,
+        "reason": "It leaves the content to the worker (\"Between the two, keep only what is needed\"), and it asks the worker to report \"Whether you changed, modified or declined the suggestion.\""
+      }
+    ],
+    "c1_dictated_wording|mayor_V0|no_filler": [
+      {
+        "run": "c1_dictated_wording__mayor_V0__2",
+        "pass": true,
+        "reason": "It has no empty or N/A template fields, and its instructions (lint, commit, reply, report) all relate to the change."
+      },
+      {
+        "run": "c1_dictated_wording__mayor_V0__0",
+        "pass": false,
+        "reason": "It includes an instruction unrelated to this change: \"don't reply to any other reviewer's threads. Draft those replies and send them to me.\""
+      },
+      {
+        "run": "c1_dictated_wording__mayor_V0__1",
+        "pass": false,
+        "reason": "It includes an unrelated request: \"Any other unanswered threads you saw on #196561.\""
+      }
+    ],
+    "c2_remove_section|mayor_V0|direct": [
+      {
+        "run": "c2_remove_section__mayor_V0__0",
+        "pass": false,
+        "reason": "Step 1 asks the worker to \"Weigh the comment before you change anything\" and to judge whether removing the text \"leaves a real gap\", and the report allows \"Changed, modified or declined\", so the worker decides whether the docs should change."
+      },
+      {
+        "run": "c2_remove_section__mayor_V0__2",
+        "pass": false,
+        "reason": "Step 3 asks the worker to search other breaking-changes pages and \"Remove those only if they are the same old-version guidance\", so the worker decides whether other docs must change."
+      },
+      {
+        "run": "c2_remove_section__mayor_V0__1",
+        "pass": true,
+        "reason": "It says \"Remove the guidance for projects created before Flutter 3.16\" and \"The user asked for this change, so make it... Don't keep the section.\""
+      }
+    ],
+    "c2_remove_section|mayor_V0|no_filler": [
+      {
+        "run": "c2_remove_section__mayor_V0__0",
+        "pass": true,
+        "reason": "The brief has no empty or N/A fields, and every step (scope, references, checks, push, reply) is about this removal."
+      },
+      {
+        "run": "c2_remove_section__mayor_V0__2",
+        "pass": true,
+        "reason": "The brief has no empty or N/A fields, and its steps all serve this removal and its reply."
+      },
+      {
+        "run": "c2_remove_section__mayor_V0__1",
+        "pass": true,
+        "reason": "The brief has no empty or N/A template fields, and every instruction relates to the removal, checks, push or reply."
+      }
+    ],
+    "c2_remove_section|mayor_V1_rules|direct": [
+      {
+        "run": "c2_remove_section__mayor_V1_rules__0",
+        "pass": true,
+        "reason": "It states \"The user asked for this exact change, so make it: remove the pre-Flutter-3.16 `ext.kotlin_version` instructions. Don't argue for keeping them.\""
+      },
+      {
+        "run": "c2_remove_section__mayor_V1_rules__2",
+        "pass": false,
+        "reason": "Step 3 asks the worker to decide about the FGP sentence: \"Tell me whether it should go with the section or whether any part of it still applies to current projects.\""
+      },
+      {
+        "run": "c2_remove_section__mayor_V1_rules__1",
+        "pass": false,
+        "reason": "It says \"Make the change unless it breaks the page or makes it harder to maintain\", which asks the worker to judge whether the docs change should happen at all."
+      }
+    ],
+    "c2_remove_section|mayor_V1_rules|no_filler": [
+      {
+        "run": "c2_remove_section__mayor_V1_rules__0",
+        "pass": false,
+        "reason": "Step 7 (\"Re-fetch the PR's review threads... List any new or unanswered comment\") has nothing to do with this change, and the \"<AUTHOR-BRIEF: ... if that file exists>\" placeholder is conditional filler."
+      },
+      {
+        "run": "c2_remove_section__mayor_V1_rules__2",
+        "pass": false,
+        "reason": "The report asks for \"any other unanswered review threads you saw on #14053\", which has nothing to do with this change."
+      },
+      {
+        "run": "c2_remove_section__mayor_V1_rules__1",
+        "pass": true,
+        "reason": "The brief has no empty or N/A fields, and all steps are about the removal and its reply."
+      }
+    ],
+    "c2_remove_section|mayor_V2_rules_template|direct": [
+      {
+        "run": "c2_remove_section__mayor_V2_rules_template__0",
+        "pass": true,
+        "reason": "It says \"The user has decided the change: remove the pre-Flutter-3.16 `ext.kotlin_version` instructions\" and lists exact deletions."
+      },
+      {
+        "run": "c2_remove_section__mayor_V2_rules_template__1",
+        "pass": true,
+        "reason": "It says \"The user dictated this change, so make it as stated. Remove the whole pre-Flutter-3.16 `ext.kotlin_version` section.\""
+      },
+      {
+        "run": "c2_remove_section__mayor_V2_rules_template__2",
+        "pass": true,
+        "reason": "It says \"Task: Remove the pre-Flutter 3.16 `ext.kotlin_version` section\" and defines exactly where the section starts and ends."
+      }
+    ],
+    "c2_remove_section|mayor_V2_rules_template|no_filler": [
+      {
+        "run": "c2_remove_section__mayor_V2_rules_template__0",
+        "pass": false,
+        "reason": "It has a not-applicable \"Claims and evidence\" field (\"you have nothing to reproduce\") and an unrelated instruction about \"an unanswered thread from any other human reviewer\"."
+      },
+      {
+        "run": "c2_remove_section__mayor_V2_rules_template__1",
+        "pass": false,
+        "reason": "It includes an empty template field: \"Claims and evidence: None to reproduce.\""
+      },
+      {
+        "run": "c2_remove_section__mayor_V2_rules_template__2",
+        "pass": false,
+        "reason": "It includes a not-applicable \"Claims and evidence\" field: \"The comment does not claim any behavior... Nobody has reproduced it, and you don't need to\"."
+      }
+    ],
+    "c3_worker_dictated_wording|worker_W0|minimal_change": [
+      {
+        "run": "c3_worker_dictated_wording__worker_W0__0",
+        "pass": true,
+        "reason": "The diff changes only the KDoc paragraph, and the report says \"only the class KDoc... No code changes.\" Its only checks are the usual `ktlintCheck test` and `analyze.dart`, with no extra investigation."
+      },
+      {
+        "run": "c3_worker_dictated_wording__worker_W0__2",
+        "pass": true,
+        "reason": "The diff changes only the KDoc (\"Comment only... No code changes\"), and the checks are lint, format and Gradle tests. The PR-body check is routine housekeeping, not reproduction or a code change."
+      },
+      {
+        "run": "c3_worker_dictated_wording__worker_W0__1",
+        "pass": true,
+        "reason": "The diff changes only the class KDoc (\"Only the class KDoc... No code changed\"), and the checks are ktlint and Gradle tests. Its conditional merge of `origin/master` is routine branch sync, not a proposed code change."
+      }
+    ],
+    "c3_worker_dictated_wording|worker_G|minimal_change": [
+      {
+        "run": "c3_worker_dictated_wording__worker_G__1",
+        "pass": true,
+        "reason": "The diff touches only the second KDoc paragraph, and the report says \"The code does not change.\" It runs only ktlint, Gradle tests and `analyze.dart`, and proposes no other code change."
+      },
+      {
+        "run": "c3_worker_dictated_wording__worker_G__2",
+        "pass": false,
+        "reason": "The diff is KDoc-only, but the report proposes an unrelated code change: \"A code fix would take the main manifest from a static source... Tell me if you want it as a follow-up or in this PR.\""
+      },
+      {
+        "run": "c3_worker_dictated_wording__worker_G__0",
+        "pass": false,
+        "reason": "The diff is KDoc-only, but the report and thread reply propose a code change beyond the request: \"Proposed fix: take the main manifest from a static-only source rather than picking it out of `variant.sources.manifests.all`.\" It also asks \"Want that in this PR?\""
+      }
+    ],
+    "s5_review_reworded_error|adv_AB|finds_code_path": [
+      {
+        "run": "s5_review_reworded_error__adv_AB__2",
+        "pass": true,
+        "reason": "Its first finding says that with the flag and no manifest versionCode \"nothing checks the manifest. No error is raised, and the outputs are left unchanged\", and that \"Only the advice changed.\""
+      },
+      {
+        "run": "s5_review_reworded_error__adv_AB__1",
+        "pass": true,
+        "reason": "Its top finding says \"The flag still skips the check and builds the APKs it now calls uninstallable\" and that \"every code path that leads to the bad outcome is still there.\""
+      },
+      {
+        "run": "s5_review_reworded_error__adv_AB__0",
+        "pass": true,
+        "reason": "Its first finding traces the case \"no positive versionCode in the manifest... no error is raised, and output.versionCode is never set\" and concludes \"The commit changes the advice but not the behavior.\""
+      }
+    ],
+    "s5_review_reworded_error|adv_A|finds_code_path": [
+      {
+        "run": "s5_review_reworded_error__adv_A__2",
+        "pass": false,
+        "reason": "It argues the flag can help in the variant-manifest case and never reports that the flag path still builds APKs with no versionCode; it treats the early return only as context."
+      },
+      {
+        "run": "s5_review_reworded_error__adv_A__0",
+        "pass": false,
+        "reason": "It notes that the flag skips the per-ABI versionCodes, but only to question the KDoc's install claim; it lists the early return as \"Checked and found clean\" instead of reporting a leftover code path."
+      },
+      {
+        "run": "s5_review_reworded_error__adv_A__1",
+        "pass": false,
+        "reason": "It treats the flag bypass as a useful escape hatch (\"the flag still works as a bypass\") and argues the suggestion was removed too widely; it never reports that the flag still produces APKs with no versionCode."
+      }
+    ]
+  }
+}

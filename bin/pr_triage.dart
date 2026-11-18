@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:args/args.dart';
 import 'package:dotfiles/src/pr_triage/github_fetcher.dart';
+import 'package:dotfiles/src/pr_triage/ready_check.dart';
 import 'package:dotfiles/src/pr_triage/thread_scanner.dart';
 import 'package:dotfiles/src/pr_triage/triage_engine.dart';
 import 'package:file/local.dart';
@@ -23,6 +24,10 @@ Future<void> main(List<String> args) async {
   if (opts == null) return;
   if (opts.flag('threads')) {
     exitCode = await runThreads(opts);
+    return;
+  }
+  if (opts.flag('ready')) {
+    exitCode = await runReady(opts);
     return;
   }
 
@@ -67,10 +72,32 @@ ArgParser _buildParser() => ArgParser()
         'List reviewer feedback the agent has not answered '
         '(needs --repo or --pr).',
   )
+  ..addFlag(
+    'ready',
+    negatable: false,
+    help:
+        'Print READY or NOT READY for each --pr. READY needs an '
+        'adversarial-review log entry covering every non-merge commit, no '
+        'unanswered human inline review thread, and no human '
+        'CHANGES_REQUESTED review. Exits 1 if any PR is not ready.',
+  )
+  ..addOption(
+    'review-log',
+    help: '--ready: review log path (default ~/.agents/review-log.jsonl).',
+  )
   ..addOption('repo', help: '--threads: repository as owner/name.')
   ..addOption(
     'agent',
-    help: '--threads: login whose reply marks a thread done.',
+    help:
+        '--threads, --ready: login whose reply marks a thread done '
+        '(--ready: replaces the PR author).',
+  )
+  ..addOption(
+    'user',
+    defaultsTo: 'reidbaker',
+    help:
+        '--ready: the human the agents work for. Their reply answers a '
+        'thread another reviewer started.',
   )
   ..addOption('since', help: '--threads: ISO time or duration (e.g. 6h).')
   ..addOption(
@@ -80,7 +107,7 @@ ArgParser _buildParser() => ArgParser()
   )
   ..addMultiOption(
     'ignore-author',
-    help: '--threads: login to treat like the agent (repeatable).',
+    help: '--threads, --ready: login to treat like the agent (repeatable).',
   )
   ..addMultiOption(
     'author',
@@ -190,4 +217,50 @@ Future<int> runThreads(ArgResults opts, {ThreadScanner? scanner}) async {
     stderr.writeln('error: fetch failed, report is incomplete: $failure');
   }
   return result.failures.isEmpty ? 0 : 1;
+}
+
+/// Runs `--ready` mode and returns the process exit code: 0 when every PR is
+/// ready, 1 when any is not, 64 on bad usage.
+Future<int> runReady(ArgResults opts, {ReadyChecker? checker}) async {
+  final specs = _parsePrSpecs(opts.multiOption('pr'));
+  if (specs == null) return 64;
+  if (specs.isEmpty) {
+    stderr.writeln('--ready requires --pr owner/repo#N.');
+    return 64;
+  }
+  final logPath = opts.option('review-log') ?? _defaultReviewLog();
+  if (logPath == null) {
+    stderr.writeln('--ready needs --review-log when HOME is not set.');
+    return 64;
+  }
+  final logFile = File(logPath);
+  if (!logFile.existsSync()) {
+    stderr.writeln('warning: no review log at $logPath');
+  }
+  final log = logFile.existsSync()
+      ? parseReviewLog(logFile.readAsStringSync())
+      : <ReviewedSha>[];
+  final answerers = {
+    ?opts.option('agent'),
+    ...opts.multiOption('ignore-author'),
+  };
+  final ready = checker ?? ReadyChecker();
+  var allReady = true;
+  for (final spec in specs) {
+    final verdict = await ready.check(
+      spec,
+      log,
+      answerers: answerers,
+      user: opts.option('user'),
+    );
+    stdout.writeln(verdict.line);
+    allReady = allReady && verdict.ready;
+  }
+  return allReady ? 0 : 1;
+}
+
+String? _defaultReviewLog() {
+  final home = Platform.environment['HOME'];
+  if (home == null || home.isEmpty) return null;
+  return p.join(home, '.agents', 'review-log.jsonl');
 }

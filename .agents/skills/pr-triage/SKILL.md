@@ -1,6 +1,6 @@
 ---
 name: pr-triage
-description: Identifies and prioritizes GitHub Pull Requests that need attention across authored work and review queues. Use when the user asks "what PR needs my attention next", "check my PRs", "triage my pull requests", or wants to review active pull request queues.
+description: Identifies and prioritizes GitHub Pull Requests that need attention across authored work and review queues, and checks whether a PR is ready to call ready (`--ready`). Use when the user asks "what PR needs my attention next", "check my PRs", "triage my pull requests", or wants to review active pull request queues.
 ---
 
 # PR Triage Skill
@@ -254,3 +254,34 @@ only by the maintainer.
 
 A non-zero exit or any `FETCH FAILURE` line means the report is incomplete.
 Do not call the round done until a run exits 0.
+
+---
+
+## Readiness check (`--ready`)
+
+```bash
+(cd ~/devconfig && dart run bin/pr_triage.dart --ready --pr <owner/repo#N>[,<owner/repo#N>] \
+  [--agent <login>] [--user <login>] [--ignore-author <login>] [--review-log <path>])
+```
+
+Prints one line per PR, `READY <pr>` or `NOT READY <pr>: <reasons>`; exits 1 if
+any PR is not ready. `READY` needs all three:
+
+1. Every non-merge commit on the PR is covered by an `adversarial-review` entry
+   for that repo in `~/.agents/review-log.jsonl` (an entry covers its
+   `reviewed_sha` and every ancestor; short SHAs match as prefixes).
+2. No unresolved inline review thread whose last human comment is from a
+   reviewer. A commit dated after the comment counts as the answer only when
+   the thread has a single human comment and GitHub marks it outdated; any
+   follow-up comment needs an answerer's reply.
+3. No human reviewer's latest approval or change request is `CHANGES_REQUESTED`
+   (a later plain comment does not clear it).
+
+Answerers are the PR author, or the `--agent`/`--ignore-author` logins when
+given. A reply from `--user <login>` (default `reidbaker`) also answers a thread
+another reviewer started; a thread `--user` started still waits for an answerer.
+`--threads` still lists threads `--ready` counts as answered by `--user` (unless
+in `--ignore-author`) or by code (reply to those anyway). Not checked: PR-level
+comments, review bodies without `CHANGES_REQUESTED`, and conflict fixes inside
+merge commits (review those by hand). PRs with 250+ commits are `NOT READY`
+because GitHub lists only 250.

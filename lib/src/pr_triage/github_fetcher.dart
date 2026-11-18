@@ -15,6 +15,30 @@ Future<ProcessResult> defaultCommandRunner(
   List<String> arguments,
 ) => Process.run(executable, arguments);
 
+/// Whether a GitHub account is a bot, from its login and its type (REST
+/// `type` or GraphQL `__typename`). GraphQL bot logins have no `[bot]`
+/// suffix, so the type is the reliable signal there.
+bool isBotAccount(String login, String? typeName) =>
+    typeName == 'Bot' || login.endsWith('[bot]');
+
+/// The `login` of a GitHub user object. A deleted account has no user object;
+/// GitHub shows it as `ghost`.
+String loginOf(Object? user) =>
+    (user is Map ? user['login'] as String? : null) ?? 'ghost';
+
+/// Runs `gh` with [args] through [runner] and decodes its JSON output.
+/// Throws [FormatException] when `gh` exits non-zero.
+Future<Object?> ghJson(CommandRunner runner, List<String> args) async {
+  final res = await runner('gh', args);
+  if (res.exitCode != 0) {
+    throw FormatException(
+      '`gh ${args.take(3).join(' ')}` exited ${res.exitCode}: '
+      '${res.stderr.toString().trim()}',
+    );
+  }
+  return jsonDecode(res.stdout.toString());
+}
+
 /// Identifies a single pull request by repository (`owner/name`) and number.
 class PrSpec {
   const PrSpec(this.repo, this.number);

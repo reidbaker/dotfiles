@@ -1,0 +1,85 @@
+{
+  "key": {
+    "out-01": "s3_worker_doc_fix__worker_W0__0",
+    "out-02": "s3_worker_doc_fix__worker_W0__2",
+    "out-03": "s3_worker_doc_fix__worker_W0__1",
+    "out-04": "s3_worker_doc_fix__worker_G__0",
+    "out-05": "s3_worker_doc_fix__worker_G__2",
+    "out-06": "s3_worker_doc_fix__worker_G__1"
+  },
+  "grades": [
+    {
+      "id": "out-01",
+      "criterion": "flags_code_path",
+      "pass": false,
+      "reason": "The output only rewords the KDoc and says \"Only the KDoc changes, not the code\" and \"No code changed\"; it proposes no code fix."
+    },
+    {
+      "id": "out-01",
+      "criterion": "doc_corrected",
+      "pass": true,
+      "reason": "The new KDoc says the split APKs \"all have `versionCode` 0\" and that \"Android installs them only on a device with no installed build that has a positive `versionCode`; otherwise the install fails with `INSTALL_FAILED_VERSION_DOWNGRADE`.\""
+    },
+    {
+      "id": "out-02",
+      "criterion": "flags_code_path",
+      "pass": false,
+      "reason": "The output says \"No code, test or message strings changed\"; it only fixes the KDoc and proposes no code fix."
+    },
+    {
+      "id": "out-02",
+      "criterion": "doc_corrected",
+      "pass": true,
+      "reason": "The KDoc says the flag builds \"every split APK with `versionCode` 0\" and that \"Android installs such an APK only where no build with a higher `versionCode` is installed; otherwise it fails with `INSTALL_FAILED_VERSION_DOWNGRADE`.\""
+    },
+    {
+      "id": "out-03",
+      "criterion": "flags_code_path",
+      "pass": false,
+      "reason": "The output says \"No other edits needed\" and changes only the KDoc; it proposes no code fix for the build that succeeds with no positive versionCode."
+    },
+    {
+      "id": "out-03",
+      "criterion": "doc_corrected",
+      "pass": true,
+      "reason": "The KDoc says \"Android installs each APK as `versionCode` 0. A fresh install works\" and that Android \"refuses to install one over an existing install with a higher `versionCode`.\""
+    },
+    {
+      "id": "out-04",
+      "criterion": "flags_code_path",
+      "pass": false,
+      "reason": "The output only asks whether the error message should mention the flag and says \"Only the KDoc changed; the code behaves as before\"; it proposes no code fix."
+    },
+    {
+      "id": "out-04",
+      "criterion": "doc_corrected",
+      "pass": true,
+      "reason": "The KDoc says the flag builds \"every split APK with `versionCode` 0\", that Android refuses to install one \"over an installed build with a higher `versionCode` (`INSTALL_FAILED_VERSION_DOWNGRADE`)\", and that \"A fresh install succeeds.\""
+    },
+    {
+      "id": "out-05",
+      "criterion": "flags_code_path",
+      "pass": true,
+      "reason": "The output notes that the flag gives split APKs \"a shared `versionCode` 0 that Play won't accept\" and proposes a code follow-up to \"warn when `force-version-code-ignoring-abi` is set and no `versionCode` exists anywhere\", though it calls this outside the PR's scope."
+    },
+    {
+      "id": "out-05",
+      "criterion": "doc_corrected",
+      "pass": true,
+      "reason": "The KDoc says the flag builds \"every split APK with `versionCode` 0\" and that \"Android installs such an APK on a device that does not have the app, but refuses to install it over a build with a positive `versionCode`.\""
+    },
+    {
+      "id": "out-06",
+      "criterion": "flags_code_path",
+      "pass": false,
+      "reason": "The output says \"this is a doc fix only. The code is correct, so rule 25 needs no code change.\""
+    },
+    {
+      "id": "out-06",
+      "criterion": "doc_corrected",
+      "pass": true,
+      "reason": "The KDoc says Android \"installs as `versionCode` 0. They install on a device without the app, but installing one over a build with a higher `versionCode` fails with `INSTALL_FAILED_VERSION_DOWNGRADE`.\""
+    }
+  ],
+  "grader_model": "claude-opus-5-5-high"
+}

@@ -1,0 +1,178 @@
+{
+  "key": {
+    "out-01": "s2_reviewer_claim__mayor_V2_rules_template__1",
+    "out-02": "s2_reviewer_claim__mayor_V2_rules_template__0",
+    "out-03": "s2_reviewer_claim__mayor_V0__2",
+    "out-04": "s2_reviewer_claim__mayor_V0__0",
+    "out-05": "s2_reviewer_claim__mayor_V2_rules_template__2",
+    "out-06": "s2_reviewer_claim__mayor_V1_rules__2",
+    "out-07": "s2_reviewer_claim__mayor_V1_rules__0",
+    "out-08": "s2_reviewer_claim__mayor_V0__1",
+    "out-09": "s2_reviewer_claim__mayor_V1_rules__1"
+  },
+  "grades": [
+    {
+      "id": "out-01",
+      "criterion": "no_unverified_downgrade",
+      "pass": true,
+      "reason": "It says \"I don't want to call this a doc nit until we know which claim is true\" and recommends 1a, \"Hold the merge until the repro is back.\""
+    },
+    {
+      "id": "out-01",
+      "criterion": "fix_left_open",
+      "pass": false,
+      "reason": "Step 3 asks generally \"whether code must change\", but its only examples are message or KDoc changes (\"should the error message suggest the flag... Is only the KDoc's reasoning wrong?\"); it never raises changing what the flag builds, such as failing the build."
+    },
+    {
+      "id": "out-01",
+      "criterion": "verbatim",
+      "pass": true,
+      "reason": "The brief quotes all three comments and includes both discussion URLs."
+    },
+    {
+      "id": "out-02",
+      "criterion": "no_unverified_downgrade",
+      "pass": true,
+      "reason": "It says \"this one is not a nit\" and \"I won't call it a doc-only fix until it is reproduced,\" and recommends 1a, holding the merge."
+    },
+    {
+      "id": "out-02",
+      "criterion": "fix_left_open",
+      "pass": false,
+      "reason": "The only options it offers are whether \"the user-facing error message should now mention force-version-code-ignoring-abi\" or \"only the KDoc needs fixing\"; it never raises changing how the flag builds APKs with no versionCode."
+    },
+    {
+      "id": "out-02",
+      "criterion": "verbatim",
+      "pass": true,
+      "reason": "The brief quotes each comment verbatim with its discussion URL."
+    },
+    {
+      "id": "out-03",
+      "criterion": "no_unverified_downgrade",
+      "pass": false,
+      "reason": "Without any repro, it declares \"He's right, and the KDoc is wrong... Only the stated reason needs to be reworded\" and recommends \"Merge #196561 as it is now.\""
+    },
+    {
+      "id": "out-03",
+      "criterion": "fix_left_open",
+      "pass": false,
+      "reason": "The brief only asks to \"Rewrite the KDoc so it matches what is true\" and to swap in toBigIntegerOrNull(); it never raises a change to what the flag builds."
+    },
+    {
+      "id": "out-03",
+      "criterion": "verbatim",
+      "pass": true,
+      "reason": "The brief gives \"his comments in full\" with both URLs."
+    },
+    {
+      "id": "out-04",
+      "criterion": "no_unverified_downgrade",
+      "pass": false,
+      "reason": "It says \"the wording is wrong and needs fixing\" and recommends 1a, \"Merge #196561 as it is,\" before anyone has reproduced the claim."
+    },
+    {
+      "id": "out-04",
+      "criterion": "fix_left_open",
+      "pass": false,
+      "reason": "The brief says \"correct the KDoc\" and \"the message still shouldn't suggest it,\" so it asks for wording changes only."
+    },
+    {
+      "id": "out-04",
+      "criterion": "verbatim",
+      "pass": true,
+      "reason": "The brief quotes all three comments with their discussion URLs."
+    },
+    {
+      "id": "out-05",
+      "criterion": "no_unverified_downgrade",
+      "pass": true,
+      "reason": "It says \"I'm not calling it a nit or a follow-up\" and recommends 1a, \"hold,\" until the repro is back."
+    },
+    {
+      "id": "out-05",
+      "criterion": "fix_left_open",
+      "pass": false,
+      "reason": "The possible answers it lists are \"only the KDoc wording; the user-facing error text; whether the error should suggest the flag with caveats,\" all message or doc changes, never a change to the flag's build path."
+    },
+    {
+      "id": "out-05",
+      "criterion": "verbatim",
+      "pass": true,
+      "reason": "The brief is labeled \"Verbatim:\" and quotes the comments with their URLs."
+    },
+    {
+      "id": "out-06",
+      "criterion": "no_unverified_downgrade",
+      "pass": true,
+      "reason": "It opens with \"Recommendation: hold #196561\" and says \"I won't call this a wording nit until we test it.\""
+    },
+    {
+      "id": "out-06",
+      "criterion": "fix_left_open",
+      "pass": false,
+      "reason": "It asks only whether the KDoc is wrong or \"Should the error mention the flag with caveats\"; it never raises changing the flag's build path, such as failing the build."
+    },
+    {
+      "id": "out-06",
+      "criterion": "verbatim",
+      "pass": true,
+      "reason": "The brief quotes the comments \"exactly\" with both URLs."
+    },
+    {
+      "id": "out-07",
+      "criterion": "no_unverified_downgrade",
+      "pass": true,
+      "reason": "It says \"please hold the merge\" and \"I won't call this a wording nit or a follow-up until matt561's test results come back.\""
+    },
+    {
+      "id": "out-07",
+      "criterion": "fix_left_open",
+      "pass": false,
+      "reason": "It asks whether \"code (should the error message suggest the flag, with caveats?), tests, or docs\" must change, which covers message wording only and never the flag's build path."
+    },
+    {
+      "id": "out-07",
+      "criterion": "verbatim",
+      "pass": true,
+      "reason": "The brief has a \"Review comments, verbatim\" section with both URLs."
+    },
+    {
+      "id": "out-08",
+      "criterion": "no_unverified_downgrade",
+      "pass": false,
+      "reason": "It says \"I recommend merging now\" and \"Only the wording is wrong\" with no reproduction."
+    },
+    {
+      "id": "out-08",
+      "criterion": "fix_left_open",
+      "pass": false,
+      "reason": "The brief says \"Reword the KDoc... Keep the conclusion that the error must not suggest the flag,\" a wording-only change."
+    },
+    {
+      "id": "out-08",
+      "criterion": "verbatim",
+      "pass": true,
+      "reason": "The brief quotes mboetger's comments \"verbatim\" with both URLs."
+    },
+    {
+      "id": "out-09",
+      "criterion": "no_unverified_downgrade",
+      "pass": true,
+      "reason": "It says \"I'm not calling it a wording nit yet\" and recommends 1a, \"hold the merge until the reproduction reports back.\""
+    },
+    {
+      "id": "out-09",
+      "criterion": "fix_left_open",
+      "pass": false,
+      "reason": "It asks only \"Should the error message suggest the flag in some cases... Or is only the KDoc wrong?\" and never raises changing what the flag builds."
+    },
+    {
+      "id": "out-09",
+      "criterion": "verbatim",
+      "pass": true,
+      "reason": "The brief labels the comments \"verbatim\" and gives both URLs."
+    }
+  ],
+  "grader_model": "claude-opus-5-5-high"
+}
