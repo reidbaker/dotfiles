@@ -141,6 +141,8 @@ falsify:
 - A consolidation or refactor silently drops an instruction, CLI flag, or
   example, or shifts a modal verb (`ask`/`propose` to `write`/`push`), without
   a 1-to-1 destination.
+- A fix that rewords an error, comment, or doc about a bad outcome still leaves
+  a code path that produces that outcome.
 
 Not a hypothesis: "the error handling could be better." Nothing falsifies that,
 so investigating it produces opinion, not findings.
